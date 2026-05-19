@@ -1,0 +1,10 @@
+flask
+gunicorn
+openai
+python-dotenv
+numpy
+python-frontmatter
+pyyaml
+pydantic>=2.0
+pymorphy3
+psycopg[binary]

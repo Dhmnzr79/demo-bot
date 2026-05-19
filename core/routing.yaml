@@ -1,0 +1,54 @@
+ingress:
+  min_confidence:
+    hard_stop_non_target: 0.65
+    manual_contact: 0.65
+    service_not_offered: 0.65
+
+resolver:
+  min_confidence:
+    intent: 0.7
+    topic: 0.6
+    service: ignored
+    query_mode: 0.5
+
+arbiter:
+  min_confidence: 0.6
+
+verifier:
+  min_confidence: 0.7
+  # Таймаут одного LLM-вызова A7 (сек). Источник истины — YAML, не константы в коде.
+  timeout_sec: 12
+  # Максимум параллельных shadow-вызовов A7 (воркеры пула).
+  max_concurrent_shadow: 4
+  # Доп. слотов «в полёте» (ожидают воркер) поверх max_concurrent_shadow; при переполнении — drop + telemetry.
+  shadow_backlog_max: 16
+
+retrieval:
+  scope_topic_min_confidence: 0.6
+  low_score_threshold: 0.33
+  # ниже — игнорировать Resolver topic scope при сильном alias (конфликт-гард PR #1.4)
+  alias_scope_guard_min: 0.85
+
+catalog_match:
+  containment_min: 0.88
+
+# PR #1.10 — corpus alias (exact + build-time alias embeddings + controlled rescue).
+# Runtime source of truth for alias behavior; do not duplicate as 0.x literals in *.py.
+alias:
+  strong_effective_min: 0.82
+  soft_assist_min: 0.72
+  near_exact_score: 0.94
+  near_exact_length_ratio_min: 0.85
+  embedding_high_min: 0.78
+  embedding_strong_cosine_min: 0.82
+  embedding_medium_min: 0.58
+  embedding_medium_max: 0.78
+  embedding_medium_score_cap: 0.76
+  rescue_max_query_chars: 14
+  rescue_max_core_tokens: 4
+  rescue_min_sim: 0.72
+  rescue_margin_min: 0.035
+  rescue_effective_cap: 0.88
+  scope_guard_min: 0.85
+  embed_matrix_top_chunks: 48
+

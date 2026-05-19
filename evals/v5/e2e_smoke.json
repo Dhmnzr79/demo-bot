@@ -1,0 +1,400 @@
+{
+  "baseline": 35,
+  "known_v4_failures": [
+    {
+      "case_id": "smoke_multi_turn_all_on_4_price",
+      "reason": "v4 query_rewrite + pronoun resolution на multi-turn",
+      "expected_fix_in_pr": "#1.3"
+    },
+    {
+      "case_id": "smoke_multi_turn_switch_implant_to_crowns",
+      "reason": "v4 query_rewrite склеивает темы при topic switch",
+      "expected_fix_in_pr": "#1.3"
+    },
+    {
+      "case_id": "smoke_multi_turn_followup_short",
+      "reason": "v4 short follow-up теряет topic",
+      "expected_fix_in_pr": "#1.3"
+    },
+    {
+      "case_id": "smoke_price_concern_general_no_service",
+      "reason": "v4 price_concern path возвращает шаблон вместо retrieval из faq__cost.md",
+      "expected_fix_in_pr": "#1.4"
+    },
+    {
+      "case_id": "smoke_multi_turn_topic_switch_to_contacts",
+      "reason": "v4 query_rewrite склеивает контекст предыдущих turns",
+      "expected_fix_in_pr": "#1.3",
+      "fixed_in_pr": "#1.3"
+    },
+    {
+      "case_id": "smoke_short_warranty_question",
+      "reason": "v4 content_arbiter правило broad_ambiguous_guided",
+      "expected_fix_in_pr": "#1.7"
+    }
+  ],
+  "cases": [
+    {
+      "id": "smoke_contacts_phone",
+      "question": "Телефон клиники",
+      "expected_route": "contacts_chunk",
+      "must_contain": ["телефон"],
+      "comment": "contacts (телефон)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_contacts_address",
+      "question": "Где вы находитесь?",
+      "expected_route": "contacts_chunk",
+      "must_contain": ["адрес"],
+      "comment": "contacts (адрес)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_contacts_hours",
+      "question": "Какой у вас график работы?",
+      "expected_route": "contacts_chunk",
+      "must_contain": [],
+      "comment": "contacts (график/часы)",
+      "coverage_class": "WEAK"
+    },
+
+    {
+      "id": "smoke_booking_want",
+      "question": "Хочу записаться",
+      "expected_route": "lead_flow",
+      "must_contain": ["как к вам"],
+      "comment": "booking/lead",
+      "coverage_class": "TEMPLATE"
+    },
+    {
+      "id": "smoke_booking_today",
+      "question": "Можно записаться сегодня?",
+      "expected_route": "lead_flow",
+      "must_contain": ["как к вам"],
+      "comment": "booking/lead",
+      "coverage_class": "TEMPLATE"
+    },
+    {
+      "id": "smoke_booking_pain_emotional",
+      "question": "Очень болит зуб, срочно запишите меня пожалуйста",
+      "expected_route": "lead_flow",
+      "must_contain": ["как к вам"],
+      "comment": "booking/lead (эмо/боль)",
+      "coverage_class": "TEMPLATE"
+    },
+
+    {
+      "id": "smoke_price_all_on_4",
+      "question": "Сколько стоит All-on-4?",
+      "expected_route": "price_lookup",
+      "must_contain": ["стоим"],
+      "comment": "price_lookup",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_classic",
+      "question": "Сколько стоит классическая имплантация?",
+      "expected_route": "price_lookup",
+      "must_contain": ["стоим"],
+      "comment": "price_lookup",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_ct",
+      "question": "Вы делаете КТ зубов и сколько это стоит?",
+      "expected_route": "price_lookup",
+      "must_contain": ["кт"],
+      "comment": "price_lookup (КТ)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_general",
+      "question": "Сколько стоит имплантация?",
+      "expected_route": "price_lookup",
+      "must_contain": ["стоим"],
+      "comment": "price_lookup (общий)",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_price_concern_expensive",
+      "question": "Дорого",
+      "expected_route": "price_concern",
+      "must_contain": ["материал"],
+      "must_not_contain": ["уточнить у администратор", "записать вас на консультац"],
+      "comment": "price_concern",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_concern_why",
+      "question": "Почему так дорого?",
+      "expected_route": "price_concern",
+      "must_contain": ["материал"],
+      "must_not_contain": ["уточнить у администратор", "записать вас на консультац"],
+      "comment": "price_concern (why)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_concern_general_no_service",
+      "question": "почему дорого?",
+      "must_contain": ["материал"],
+      "must_not_contain": ["уточнить у администратор", "записать вас на консультац"],
+      "expected_route": "price_concern",
+      "comment": "price_concern без матча услуги: A3 уводит на default concern_ref (implantation__faq__cost).",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_content_impl_pain",
+      "question": "Больно ли ставить имплант?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["анестез"],
+      "comment": "content_implantation (pain)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_content_impl_duration",
+      "question": "Сколько длится приживление импланта?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": [],
+      "comment": "content_implantation (duration); маршрут для вопросов о сроках/приживлении без doctors_list (PR cleanup).",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_content_impl_osseointegration",
+      "question": "Какая приживаемость имплантов?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["прижив"],
+      "comment": "content_implantation (osseointegration)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_content_impl_safety",
+      "question": "Насколько это безопасно?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["безопас"],
+      "comment": "content_implantation (safety)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_content_impl_contra",
+      "question": "Какие противопоказания к имплантации?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["противопоказ"],
+      "comment": "content_implantation (contraindications)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_content_impl_process_with_doctor_word",
+      "question": "Как врач ставит имплант?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": [],
+      "must_not_contain": ["моисеев", "бояршин", "ларин", "хан"],
+      "comment": "процесс/техника, не doctors_lookup; имена из md не должны попадать в ответ.",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_doctors_who_classic_implant",
+      "question": "Кто делает классическую имплантацию?",
+      "expected_route_any": ["doctors_list", "retrieval_chunk"],
+      "must_contain": [],
+      "comment": "doctor-only: список или один чанк; не price_lookup; маршруты из meta.orch_route (run_e2e_smoke._infer_route_from_response).",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_doctors_moiseev_profile",
+      "question": "Расскажите про Моисеева",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["моисе"],
+      "comment": "doctor-only: профиль врача; не отдельного route name doctor в раннере нет.",
+      "coverage_class": "WEAK"
+    },
+
+    {
+      "id": "smoke_cross_topic_extraction",
+      "question": "Нужно удалить зуб, что делать?",
+      "expected_route": "retrieval_chunk",
+      "must_not_contain": ["сделаем имплант", "поставим имплант", "запишем на имплант"],
+      "comment": "extraction: в md допустимо упоминание импланта как связанной темы; запрещаем только «продажные» формулировки",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_cross_topic_veneers",
+      "question": "Сколько стоят виниры?",
+      "expected_route_any": ["price_lookup", "retrieval_chunk"],
+      "must_contain": ["стоим"],
+      "comment": "veneers: цена или честное объяснение без выдуманных цифр; без doctors_list (цена не смешиваем со списком врачей).",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_no_price_in_catalog",
+      "question": "Сколько стоят виниры?",
+      "must_contain": ["уточн"],
+      "must_not_contain": ["3 000 ₽", "8 500 ₽", "25 000 ₽"],
+      "expected_route_any": ["price_lookup", "retrieval_chunk"],
+      "comment": "veneers без чужих цен; без doctors_list. Отдельные doctor-only кейсы — ниже.",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_cross_topic_braces",
+      "question": "А брекеты делаете?",
+      "must_contain": ["элайнер"],
+      "must_not_contain": ["да, делаем брекеты", "ставим брекеты"],
+      "expected_route": "ingress_service_not_offered",
+      "comment": "Брекеты не в каталоге — ingress service_not_offered + alternative элайнеры.",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_ingress_pediatric",
+      "question": "Есть ли у вас детский стоматолог?",
+      "expected_route": "ingress_not_offered_policy",
+      "must_contain": ["взросл"],
+      "must_not_contain": ["есть детский стоматолог", "принимаем детей"],
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_ingress_oms",
+      "question": "Вы работаете по ОМС?",
+      "expected_route": "ingress_not_offered_policy",
+      "must_contain": ["омс"],
+      "must_not_contain": ["работаем по омс", "принимаем по омс"],
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_handoff_weather",
+      "question": "Какая погода сегодня?",
+      "expected_route": "ingress_hard_stop_non_target",
+      "must_contain": [],
+      "comment": "offtopic — ingress hard stop, не guided",
+      "coverage_class": "TEMPLATE"
+    },
+    {
+      "id": "smoke_handoff_politics",
+      "question": "Что думаете о политике?",
+      "expected_route": "ingress_hard_stop_non_target",
+      "must_contain": [],
+      "comment": "offtopic — ingress hard stop",
+      "coverage_class": "TEMPLATE"
+    },
+
+    {
+      "id": "smoke_multi_turn_all_on_4_price",
+      "history": [
+        {"question": "Расскажи про All-on-4"}
+      ],
+      "question": "А сколько стоит?",
+      "expected_route": "price_lookup",
+      "must_contain": ["all-on-4"],
+      "comment": "multi-turn: цена должна относиться к All-on-4, не общая",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_multi_turn_switch_implant_to_crowns",
+      "history": [
+        {"question": "Какая гарантия на импланты?"}
+      ],
+      "question": "А на коронки?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["корон"],
+      "comment": "multi-turn: переключение контекста импланты → коронки",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_multi_turn_followup_short",
+      "history": [
+        {"question": "Что такое All-on-6?"}
+      ],
+      "question": "А по времени это сколько?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["месяц"],
+      "comment": "multi-turn: follow-up про время после обзора — ответ должен дать временной ориентир (напр. месяцы), а не конкретное слово «срок»",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_multi_turn_topic_switch_to_contacts",
+      "history": [
+        {"question": "Сколько длится имплантация?"}
+      ],
+      "question": "Где вы находитесь?",
+      "must_contain": ["елизово", "ленина"],
+      "must_not_contain": ["длительность импланта", "20–30 минут"],
+      "expected_route": "contacts_chunk",
+      "comment": "После имплант-контекста явный контактный вопрос — contacts_chunk.",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_booking_edge_pain_today",
+      "question": "Болит зуб, можете принять сегодня?",
+      "expected_route": "lead_flow",
+      "comment": "booking edge-case: боль + сегодня → booking (не handoff)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_booking_ambiguous_consultation",
+      "question": "Хочу проконсультироваться по имплантации",
+      "expected_route_any": ["lead_flow", "retrieval_chunk", "guided"],
+      "comment": "ambiguous: допускаем booking или контент (зависит от текущей логики)",
+      "coverage_class": "WEAK"
+    },
+
+    {
+      "id": "smoke_cross_topic_extract_and_implant",
+      "question": "Я хочу удалить зуб и поставить имплант",
+      "expected_route": "retrieval_chunk",
+      "must_contain": [],
+      "comment": "multi-intent: удаление + имплантация. В Phase 1 допустим single-source ответ по доминирующей релевантной теме; полноценная compound-архитектура вынесена после Phase 1. Smoke проверяет маршрут content (retrieval_chunk), а не буквальное слово «удаление» в ответе.",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_short_warranty_question",
+      "question": "Какая гарантия?",
+      "must_contain": ["гарант"],
+      "must_not_contain": ["могу коротко подсказать", "что для вас важнее", "выбрать направление"],
+      "expected_route": "retrieval_chunk",
+      "comment": "Короткий вопрос про гарантию: ожидается content (retrieval_chunk в smoke по meta.file); A5 Arbiter выбирает источник при 2+ кандидатах.",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_cross_topic_ortho_comparison",
+      "question": "Брекеты или элайнеры?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["брекет"],
+      "comment": "cross-topic + comparison: ортодонтия",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_typos_price_implant",
+      "question": "Сколько стоить имплантат?",
+      "expected_route": "price_lookup",
+      "comment": "typo: стоить → стоит",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_slang_price_all_on_4",
+      "question": "ан как у вас с ценами на All-on-4?",
+      "expected_route": "price_lookup",
+      "must_contain": ["all-on-4"],
+      "comment": "slang: про цены на All-on-4",
+      "coverage_class": "STRONG"
+    },
+
+    {
+      "id": "smoke_noise_smalltalk_ack",
+      "question": "понятно",
+      "expected_route_any": ["guided", "retrieval_chunk"],
+      "comment": "noise/smalltalk: реакция без падения, допускаем guided/контекстный ответ",
+      "coverage_class": "TEMPLATE"
+    },
+    {
+      "id": "smoke_noise_unclear_short",
+      "question": "а?",
+      "expected_route": "guided",
+      "comment": "noise/unclear: должен запросить уточнение",
+      "coverage_class": "TEMPLATE"
+    }
+  ]
+}

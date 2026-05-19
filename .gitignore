@@ -1,0 +1,39 @@
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Индекс и сессии (пересобираются локально)
+data/embeddings.npy
+data/sessions/
+data/bot.db
+data/bot.db-*
+
+# Локальные логи (вся папка, включая ротацию *.jsonl.*)
+logs/
+
+# Черновики и отладочный инспектор — не в репозиторий демо
+drafts/
+static/debug/
+
+# Лиды с диска (демо не пишет, на всякий случай)
+leads/
+
+# Резервные копии редактора
+.history/
+
+# IDE и инструменты разработки
+.claude/
+.cursor/
+
+.DS_Store
+Thumbs.db
