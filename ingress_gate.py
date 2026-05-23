@@ -16,7 +16,6 @@ from contracts.ingress_route import (
     PolicyKey,
 )
 from core.clinic_policies_loader import (
-    find_service_alternative_note,
     load_clinic_policies,
     match_clinic_policy_key,
     policy_answer,
@@ -357,16 +356,11 @@ def build_ingress_payload(
             "интерес к записи на консультацию для взрослого пациента."
         )
     elif result.route == "service_not_offered":
-        svc = (result.requested_service or "эта услуга").strip()
-        tmpl = (
-            bundle.service_not_offered_template
-            if bundle and bundle.service_not_offered_template
-            else "К сожалению, услугу «{requested_service}» в нашей клинике не оказываем."
+        answer = (
+            "Это демо-бот, и такой информации нет в базе данных. "
+            "Если её добавить, я смогу помочь вашим клиентам с этим вопросом. "
+            "А пока можете спросить про что-нибудь другое."
         )
-        answer = tmpl.format(requested_service=svc)
-        alt = find_service_alternative_note(question or svc, client_id)
-        if alt:
-            answer = f"{answer}\n\n{alt}"
     else:
         answer = ""
 
