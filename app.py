@@ -43,7 +43,7 @@ from core.video_catalog_loader import catalog_for_widget, get_external_video_src
 from lead_service import handle_lead
 from logging_setup import LOG_FILE, emit_bot_event, get_logger, make_request_context, log_json, redact_text
 from chunk_responder import respond_from_chunk, respond_from_chunk_stream
-from flow_handlers import handle_flows
+from flow_handlers import handle_flows, resume_active_lead_flow
 from llm import classify_intent
 from ingress_gate import (
     build_ingress_payload,
@@ -180,6 +180,63 @@ TXT = {
     "situation_back_fallback": "Хорошо, продолжим. Задайте вопрос или выберите тему.",
     "followup_choose_topic": "Могу рассказать про этапы или про сроки — что выбрать?",
 }
+GUIDED_MENU_ANSWER = (
+    "Могу коротко подсказать и помочь выбрать направление — что для вас важнее?"
+)
+
+
+def _guided_quick_replies() -> list[dict]:
+    return [
+        {"label": "Стоимость имплантации", "ref": "implantation__pricing__implants.md#korotko"},
+        {"label": "Больно ли ставить имплант?", "ref": "implantation__faq__pain.md#korotko"},
+        {"label": "Что будет на консультации?", "ref": "clinic__info__consultation.md#korotko"},
+        {"label": "Хочу записаться", "ref": "lead:booking"},
+    ]
+
+
+def _guided_menu_payload(sid: str, client_id: str | None) -> dict:
+    return _service_payload(
+        GUIDED_MENU_ANSWER,
+        sid,
+        client_id,
+        quick_replies=_guided_quick_replies(),
+    )
+
+
+def _lead_flow_orchestration_result(
+    *,
+    q: str,
+    sid: str,
+    client_id: str | None,
+    flow_result: dict,
+    decision,
+) -> AskOrchestrationResult:
+    redirect_ref = (flow_result.get("redirect_ref") or "").strip()
+    if redirect_ref:
+        ch = get_chunk_by_ref(redirect_ref, client_id=client_id)
+        if ch:
+            return AskOrchestrationResult(
+                kind="chunk",
+                q=q,
+                sid=sid,
+                client_id=client_id,
+                chosen_chunk=ch,
+                llm_question=q or f"Информация из {redirect_ref}",
+                log_event="Answer generated from flow redirect_ref",
+                chunk_route="flow_redirect_ref",
+                decision_frame=_orch_decision_dump(decision),
+            )
+    return AskOrchestrationResult(
+        kind="service_reply",
+        q=q,
+        sid=sid,
+        client_id=client_id,
+        service_payload=flow_result["payload"],
+        service_doc_id=flow_result.get("doc_id"),
+        service_track_user=True,
+        service_route="lead_flow",
+        decision_frame=_orch_decision_dump(decision),
+    )
 _IP_RATE_LOCK = threading.RLock()
 _IP_RATE_BUCKETS: dict[str, deque] = {}
 _OBVIOUS_NOISE_RE = re.compile(r"^[^А-Яа-яЁёA-Za-z]{4,}$", re.U)
@@ -1117,25 +1174,37 @@ def _orchestrate_ask_turn(data: dict):
             )
     flow_result = handle_flows(data=data, st=st, sid=sid, q=q, client_id=client_id, txt=TXT, service_payload=_service_payload, get_last_content_ui_payload=_get_last_content_ui_payload_compat, get_topic_state=get_topic_state)
     if flow_result is not None:
-        redirect_ref = (flow_result.get('redirect_ref') or '').strip()
-        if redirect_ref:
-            ch = get_chunk_by_ref(redirect_ref, client_id=client_id)
-            if ch:
-                return AskOrchestrationResult(kind='chunk', q=q, sid=sid, client_id=client_id, chosen_chunk=ch, llm_question=q or f'Информация из {redirect_ref}', log_event='Answer generated from flow redirect_ref', chunk_route='flow_redirect_ref', decision_frame=_orch_decision_dump(decision))
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=flow_result['payload'], service_doc_id=flow_result.get('doc_id'), service_track_user=True, service_route='lead_flow', decision_frame=_orch_decision_dump(decision))
+        return _lead_flow_orchestration_result(
+            q=q, sid=sid, client_id=client_id, flow_result=flow_result, decision=decision
+        )
     st = mem_get(sid)
+    if is_active_lead_flow(st) and (q or "").strip():
+        flow_result = resume_active_lead_flow(
+            data=data,
+            sid=sid,
+            q=q,
+            client_id=client_id,
+            txt=TXT,
+            service_payload=_service_payload,
+        )
+        if flow_result is not None:
+            log_json(logger, "lead_flow_resume", sid=sid, client_id=client_id)
+            return _lead_flow_orchestration_result(
+                q=q, sid=sid, client_id=client_id, flow_result=flow_result, decision=decision
+            )
     if _is_duplicate_question(st, q):
         snap = _get_last_content_ui_payload_compat(sid)
         log_json(logger, 'duplicate_short_circuit', sid=sid, client_id=client_id)
         return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_duplicate_payload(sid, client_id, snap), service_doc_id=None, service_track_user=True, service_route='duplicate_short_circuit', decision_frame=_orch_decision_dump(decision))
-    if _is_message_burst(st):
-        set_anti_spam_redirect_shown(sid, True)
-        log_json(logger, 'anti_spam_burst_redirect', sid=sid, client_id=client_id, burst_window_sec=ANTI_SPAM_BURST_WINDOW_SEC, burst_messages=ANTI_SPAM_BURST_MESSAGES)
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_soft_redirect_payload(sid, client_id), service_doc_id=None, service_track_user=True, service_route='booking_flow', decision_frame=_orch_decision_dump(decision))
-    if _should_soft_redirect_no_intent(st):
-        set_anti_spam_redirect_shown(sid, True)
-        log_json(logger, 'anti_spam_soft_redirect', sid=sid, client_id=client_id, session_turn_count=int(st.get('session_turn_count') or 0))
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_soft_redirect_payload(sid, client_id), service_doc_id=None, service_track_user=True, service_route='booking_flow', decision_frame=_orch_decision_dump(decision))
+    if not is_active_lead_flow(st):
+        if _is_message_burst(st):
+            set_anti_spam_redirect_shown(sid, True)
+            log_json(logger, 'anti_spam_burst_redirect', sid=sid, client_id=client_id, burst_window_sec=ANTI_SPAM_BURST_WINDOW_SEC, burst_messages=ANTI_SPAM_BURST_MESSAGES)
+            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_soft_redirect_payload(sid, client_id), service_doc_id=None, service_track_user=True, service_route='booking_flow', decision_frame=_orch_decision_dump(decision))
+        if _should_soft_redirect_no_intent(st):
+            set_anti_spam_redirect_shown(sid, True)
+            log_json(logger, 'anti_spam_soft_redirect', sid=sid, client_id=client_id, session_turn_count=int(st.get('session_turn_count') or 0))
+            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_soft_redirect_payload(sid, client_id), service_doc_id=None, service_track_user=True, service_route='booking_flow', decision_frame=_orch_decision_dump(decision))
     if ref:
         ch = get_chunk_by_ref(ref, client_id=client_id)
         if ch:
@@ -1418,26 +1487,14 @@ def _orchestrate_ask_turn(data: dict):
             and bool(decision.needs_clarification)
             and intent == 'content'
             and not md_catalog_priority_ref
+            and not is_active_lead_flow(mem_get(sid))
         ):
-            guided = _service_payload(
-                'Понял. Могу коротко подсказать и помочь выбрать направление — что для вас важнее?',
-                sid,
-                client_id,
-                quick_replies=[
-                    {'label': 'Стоимость', 'ref': 'implantation__pricing__implants.md#korotko'},
-                    {'label': 'Больно ли', 'ref': 'implantation__faq__pain.md#korotko'},
-                    {'label': 'Сроки', 'ref': 'implantation__faq__duration.md#korotko'},
-                    {'label': 'Подходит ли мне', 'ref': 'implantation__info__contraindications.md#korotko'},
-                    {'label': 'Записаться', 'ref': 'clinic__info__consultation.md#korotko'},
-                ],
-                cta={'text': 'Записаться', 'action': 'lead'},
-            )
             return AskOrchestrationResult(
                 kind='service_reply',
                 q=q,
                 sid=sid,
                 client_id=client_id,
-                service_payload=guided,
+                service_payload=_guided_menu_payload(sid, client_id),
                 service_doc_id=None,
                 service_track_user=True,
                 service_route='guided',
@@ -1540,8 +1597,31 @@ def _orchestrate_ask_turn(data: dict):
             emit_bot_event(logger, 'content_arbiter_price_injection', status='ok', details={'selected_route': 'catalog_facts', 'price_line_applied': bool(price_applied), 'matched_service_id': sid_svc})
             return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=payload, service_doc_id=None, service_track_user=True, service_route='catalog_facts', decision_frame=_orch_decision_dump(decision))
         if sel.selected_route == 'guided':
-            guided = _service_payload('Понял. Могу коротко подсказать и помочь выбрать направление — что для вас важнее?', sid, client_id, quick_replies=[{'label': 'Стоимость', 'ref': 'implantation__pricing__implants.md#korotko'}, {'label': 'Больно ли', 'ref': 'implantation__faq__pain.md#korotko'}, {'label': 'Сроки', 'ref': 'implantation__faq__duration.md#korotko'}, {'label': 'Подходит ли мне', 'ref': 'implantation__info__contraindications.md#korotko'}, {'label': 'Записаться', 'ref': 'clinic__info__consultation.md#korotko'}], cta={'text': 'Записаться', 'action': 'lead'})
-            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=guided, service_doc_id=None, service_track_user=True, service_route='guided', decision_frame=_orch_decision_dump(decision))
+            if is_active_lead_flow(mem_get(sid)) and (q or "").strip():
+                flow_result = resume_active_lead_flow(
+                    data=data,
+                    sid=sid,
+                    q=q,
+                    client_id=client_id,
+                    txt=TXT,
+                    service_payload=_service_payload,
+                )
+                if flow_result is not None:
+                    log_json(logger, "lead_flow_resume", sid=sid, client_id=client_id, stage="arbiter_guided")
+                    return _lead_flow_orchestration_result(
+                        q=q, sid=sid, client_id=client_id, flow_result=flow_result, decision=decision
+                    )
+            return AskOrchestrationResult(
+                kind='service_reply',
+                q=q,
+                sid=sid,
+                client_id=client_id,
+                service_payload=_guided_menu_payload(sid, client_id),
+                service_doc_id=None,
+                service_track_user=True,
+                service_route='guided',
+                decision_frame=_orch_decision_dump(decision),
+            )
         if sel.selected_route == 'retrieval_chunk' and isinstance(sel.selected_chunk, dict):
             dmeta = cands.retrieval.get('debug_meta') or {} if isinstance(cands.retrieval, dict) else {}
             _log_selection(q=q, chosen_chunk=sel.selected_chunk, chosen_score=sel.selected_chunk.get('_score'), original_top_score=dmeta.get('top_score'), rerank_applied=bool((cands.retrieval or {}).get('rerank_applied')))

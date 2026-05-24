@@ -24,6 +24,7 @@ from session import (
 
 _LEAD_NAME_CONFIRM_YES = "lead:name_confirm:yes"
 _LEAD_NAME_CONFIRM_NO = "lead:name_confirm:no"
+LEAD_BOOKING_REF = "lead:booking"
 
 
 def _name_confirm_quick_replies() -> list[dict]:
@@ -226,6 +227,46 @@ def _lead_flow_payload(
     return None
 
 
+def resume_active_lead_flow(
+    *,
+    data: dict,
+    sid: str,
+    q: str,
+    client_id: str | None,
+    txt: dict,
+    service_payload,
+) -> dict | None:
+    """Повтор lead-flow, если оркестратор не должен уводить в content/guided."""
+    st = mem_get(sid)
+    if not is_active_lead_flow(st):
+        return None
+    if st.get("lead_intent") == "confirming_name":
+        return _handle_lead_name_confirm(
+            data=data,
+            sid=sid,
+            q=q,
+            client_id=client_id,
+            txt=txt,
+            service_payload=service_payload,
+        )
+    payload = _lead_flow_payload(
+        sid, q, client_id, txt=txt, service_payload=service_payload
+    )
+    if payload is not None:
+        return {"payload": payload, "doc_id": None}
+    set_lead_intent(sid, "collecting_name")
+    return {
+        "payload": service_payload(
+            txt["lead_name_prompt"],
+            sid,
+            client_id,
+            lead_flow=True,
+            lead_step="name",
+        ),
+        "doc_id": None,
+    }
+
+
 def handle_flows(
     *,
     data: dict,
@@ -276,6 +317,20 @@ def handle_flows(
                 situation_back=True,
             ),
             "doc_id": st.get("current_doc_id"),
+        }
+
+    if (data.get("ref") or "").strip() == LEAD_BOOKING_REF:
+        mark_booking_intent_ever(sid)
+        set_lead_intent(sid, "collecting_name")
+        return {
+            "payload": service_payload(
+                txt["lead_name_prompt"],
+                sid,
+                client_id,
+                lead_flow=True,
+                lead_step="name",
+            ),
+            "doc_id": None,
         }
 
     if st.get("lead_intent") == "confirming_name":

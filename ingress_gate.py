@@ -350,7 +350,7 @@ def build_ingress_payload(
         )
         urgent = ""
         if result.is_urgent and bundle and bundle.manual_contact_urgent_suffix:
-            urgent = bundle.manual_contact_urgent_suffix
+            urgent = " " + bundle.manual_contact_urgent_suffix.strip()
         answer = tmpl.format(phone_suffix=phone_suffix, urgent_suffix=urgent)
     elif result.route == "not_offered_policy":
         pk = str(result.policy_key or "")
