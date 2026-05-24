@@ -9,6 +9,14 @@ const WELCOME_LEAVE_MS = 240;
 const TEXTAREA_MAX_HEIGHT = 112;
 const SCROLL_NEAR_BOTTOM_PX = 80;
 const TURN_SCROLL_TOP_GAP_PX = 12;
+const VIDEO_REVEAL_LABEL = "Посмотреть видео с врачом";
+const TYPING_LABEL_SEARCHING = "Ищет в базе знаний…";
+const TYPING_LABEL_WRITING = "Печатает ответ…";
+/** Минимум показа «Печатает ответ» перед появлением текста в пузыре */
+const TYPING_WRITING_MIN_MS = 450;
+/** Синхронно с config.BOOKING_INTENT_RE — до ответа сервера не показываем «базу знаний». */
+const BOOKING_INTENT_RE =
+  /(?:запишите\s+меня|хочу\s+запис(?:аться|ать)\b|запись\s+на\s+(?:консультац|приём|прием)|остав(?:ить|лю)\s+заявку|(?<!\bкак\s)(?<!\bгде\s)(?<!\bкуда\s)\bзапис(?:аться|ать)\b(?:\s+на\s+(?:консультац|приём|прием))?)/iu;
 
 const SEND_BTN_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
@@ -18,29 +26,21 @@ const CTA_CHAT_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xm
 
 const CTA_CALENDAR_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.75"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>`;
 
-const WELCOME_LOGO_SVG = `<svg viewBox="0 0 370 371" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_clinic_welcome_logo)">
-<path d="M185.5 22.8296C153.376 22.8296 121.974 32.3553 95.2641 50.2023C68.5543 68.0492 47.7365 93.4158 35.4433 123.094C23.1501 152.773 19.9337 185.43 26.2007 216.936C32.4677 248.443 47.9367 277.383 70.6516 300.098C93.3664 322.813 122.307 338.282 153.813 344.549C185.32 350.816 217.977 347.599 247.655 335.306C277.334 323.013 302.7 302.195 320.547 275.485C338.394 248.775 347.92 217.373 347.92 185.25C347.92 163.92 343.719 142.8 335.556 123.094C327.394 103.388 315.43 85.4834 300.348 70.4013C285.266 55.3192 267.361 43.3554 247.655 35.1931C227.95 27.0307 206.829 22.8296 185.5 22.8296ZM289.11 267.75C307.22 180.15 271.61 118.48 229.67 122.75C186.67 127.08 190.84 172.26 196.79 190.87C182.65 180.45 142.2 157.12 121.85 184.87C84.8998 235.35 178.68 305.48 233.77 315.41C170.73 306.97 94.0498 264.75 61.9998 202.5C30.9998 142.16 83.6298 96.7496 131 92.5596C120.53 111.96 112.88 122.67 102.46 133.26C133.76 118.12 147.42 81.1396 162.3 67.7496C177.18 54.3596 211.18 31.0196 256.85 74.1996C305.08 119.81 308.71 226.57 289.11 267.75ZM185.5 370.75C142.706 370.721 101.238 355.901 68.1186 328.801C34.9995 301.7 12.266 263.985 3.76869 222.043C-4.72861 180.101 1.53269 136.512 21.492 98.6577C41.4514 60.8036 73.8817 31.0122 113.29 14.3296C158.568 -4.53136 209.472 -4.69727 254.871 13.8681C300.271 32.4335 336.473 68.2197 355.562 113.402C374.65 158.584 375.072 209.487 356.736 254.98C338.399 300.472 302.796 336.854 257.71 356.17C234.865 365.835 210.305 370.794 185.5 370.75ZM185.5 5.74958C86.4998 5.74958 5.99984 86.2496 5.99984 185.25C5.99984 284.25 86.4998 364.75 185.5 364.75C284.5 364.75 365 284.25 365 185.25C365 86.2496 284.5 5.74958 185.5 5.74958Z" fill="#7c3aed"/>
-<path d="M229.67 122.75C186.67 127.08 190.84 172.26 196.79 190.87C182.65 180.45 142.2 157.12 121.85 184.87C102.99 210.62 118.18 241.49 144.9 266.87C198.49 237.96 240.79 198.87 272.72 145.03C261.14 129.3 245.88 121.08 229.67 122.75Z" fill="#a78bfa"/>
-<path d="M5.99984 185.25C5.99984 86.2498 86.4998 5.7498 185.5 5.7498C232.679 5.70854 277.965 24.3045 311.5 57.4898C312.19 55.3598 312.86 53.1998 313.5 51.0298C279.021 18.2101 233.245 -0.0990757 185.644 -0.109371C138.042 -0.119665 92.2585 18.1697 57.7657 50.9745C23.2729 83.7793 2.71117 128.589 0.334976 176.131C-2.04122 223.673 13.95 270.309 44.9998 306.39L51.4098 304.52C22.1185 271.702 5.95139 229.239 5.99984 185.25Z" fill="#a78bfa"/>
-<path d="M185.5 22.8297C153.525 22.8356 122.262 32.2799 95.6324 49.9789C69.0023 67.6778 48.1892 92.8437 35.802 122.322C23.4148 151.8 20.0048 184.279 25.9994 215.688C31.9939 247.096 47.1263 276.036 69.4997 298.88C90.0093 292.174 110.053 284.12 129.5 274.77C101.29 255.89 76.8697 231.36 61.9997 202.5C30.9997 142.16 83.6297 96.7497 131 92.5597C120.53 111.96 112.88 122.67 102.46 133.26C133.76 118.12 147.42 81.1397 162.3 67.7497C177.18 54.3597 211.18 31.0197 256.85 74.1997C269.53 86.1997 279.12 102.42 286.03 120.56C293.27 105.929 299.686 90.906 305.25 75.5597C290.053 58.9266 271.554 45.6462 250.935 36.5668C230.316 27.4874 208.029 22.8088 185.5 22.8297Z" fill="#a78bfa"/>
-</g>
-<defs>
-<clipPath id="clip0_clinic_welcome_logo">
-<rect width="370" height="371" fill="white"/>
-</clipPath>
-</defs>
-</svg>`;
-
-const WELCOME_STAR_SVG = `<svg viewBox="0 0 244 244" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-<path d="M243.838 121.919C168.164 147.46 147.459 168.164 121.919 243.838C96.3781 168.164 75.674 147.459 0 121.919C75.674 96.378 96.3791 75.673 121.919 0C147.459 75.674 168.164 96.379 243.838 121.919Z" fill="#7c3aed"/>
-</svg>`;
+const WELCOME_LOGO_SVG = `<svg viewBox="0 0 101 26" preserveAspectRatio="xMidYMid meet" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M85.1918 4.41158H88.1628V7.95266H85.1918V14.1348C85.1918 14.755 85.3319 15.1951 85.612 15.4552C85.8921 15.7153 86.3322 15.8453 86.9324 15.8453C87.4725 15.8453 87.8827 15.8054 88.1628 15.7254V19.0265C87.5826 19.2666 86.8324 19.3866 85.9121 19.3866C84.4716 19.3866 83.3311 18.9865 82.4908 18.1862C81.6505 17.366 81.2304 16.2455 81.2304 14.8251V7.95266H78.5596V4.42005H81.5894V2.1355C81.5898 2.11402 81.5905 2.09243 81.5905 2.07071V0H85.1918V4.41158Z" fill="#51246B"/><path d="M88.7988 15.0837L92.22 14.3335C92.26 14.9737 92.5101 15.5139 92.9702 15.954C93.4504 16.3742 94.1006 16.5842 94.9209 16.5842C95.5411 16.5842 96.0213 16.4442 96.3614 16.1641C96.7015 15.884 96.8716 15.5339 96.8716 15.1137C96.8716 14.3735 96.3414 13.8933 95.281 13.6732L93.3304 13.2231C91.9499 12.923 90.9095 12.3828 90.2093 11.6026C89.5291 10.8223 89.189 9.89197 89.189 8.81161C89.189 7.47116 89.7091 6.33077 90.7495 5.39046C91.8098 4.45014 93.1303 3.97998 94.7108 3.97998C95.7112 3.97998 96.5915 4.13003 97.3517 4.43013C98.112 4.71023 98.7022 5.08035 99.1223 5.54051C99.5425 5.98066 99.8626 6.43081 100.083 6.89096C100.303 7.35112 100.443 7.80127 100.503 8.24142L97.1717 8.99167C97.0916 8.4715 96.8515 8.01134 96.4514 7.61121C96.0713 7.21107 95.5011 7.011 94.7408 7.011C94.2207 7.011 93.7705 7.15105 93.3904 7.43114C93.0303 7.71124 92.8502 8.06136 92.8502 8.4815C92.8502 9.20174 93.3003 9.64189 94.2007 9.80194L96.3014 10.2521C97.7218 10.5522 98.8022 11.1024 99.5425 11.9027C100.303 12.7029 100.683 13.6632 100.683 14.7836C100.683 16.1041 100.183 17.2445 99.1823 18.2048C98.182 19.1651 96.7715 19.6453 94.9509 19.6453C93.9106 19.6453 92.9802 19.4952 92.16 19.1951C91.3397 18.875 90.6995 18.4749 90.2393 17.9947C89.7992 17.4945 89.4591 17.0044 89.219 16.5242C88.9989 16.024 88.8588 15.5439 88.7988 15.0837Z" fill="#51246B"/><path d="M68.7843 10.7179V19.2108H64.793V4.4458H68.6643V6.27641C69.0844 5.55617 69.6846 5.00598 70.4649 4.62586C71.2451 4.24573 72.0654 4.05566 72.9257 4.05566C74.6663 4.05566 75.9867 4.60585 76.887 5.70622C77.8074 6.78658 78.2675 8.18706 78.2675 9.90764V19.2108H74.2762V10.5979C74.2762 9.71757 74.0461 9.00733 73.5859 8.46715C73.1458 7.92697 72.4656 7.65688 71.5452 7.65688C70.705 7.65688 70.0347 7.94698 69.5346 8.52717C69.0344 9.10737 68.7843 9.83761 68.7843 10.7179Z" fill="#51246B"/><path d="M0 15.1796C0 13.9192 0.410138 12.9088 1.23041 12.1486C2.05069 11.3883 3.11105 10.9082 4.41149 10.7081L8.04271 10.1679C8.78296 10.0679 9.15309 9.71777 9.15309 9.11757C9.15309 8.55738 8.93301 8.09723 8.49286 7.7371C8.07272 7.37698 7.46252 7.19692 6.66225 7.19692C5.82196 7.19692 5.15174 7.427 4.65157 7.88716C4.17141 8.34731 3.90132 8.9175 3.8413 9.59773L0.300101 8.84748C0.440148 7.56705 1.07036 6.43667 2.19074 5.45634C3.31112 4.47601 4.79162 3.98584 6.63224 3.98584C8.83298 3.98584 10.4535 4.51602 11.4939 5.57638C12.5342 6.61673 13.0544 7.95718 13.0544 9.59773V16.8602C13.0544 17.7405 13.1144 18.5207 13.2345 19.201H9.57323C9.47319 18.7608 9.42318 18.1706 9.42318 17.4304C8.48286 18.8909 7.03237 19.6211 5.07171 19.6211C3.5512 19.6211 2.32078 19.181 1.38047 18.3007C0.460155 17.4204 0 16.38 0 15.1796ZM5.91199 16.6501C6.85231 16.6501 7.62257 16.39 8.22277 15.8698C8.84298 15.3297 9.15309 14.4494 9.15309 13.229V12.5687L5.82196 13.0789C4.60155 13.259 3.99135 13.8792 3.99135 14.9395C3.99135 15.4197 4.1614 15.8298 4.50152 16.1699C4.84163 16.4901 5.31179 16.6501 5.91199 16.6501Z" fill="#BD35D8"/><path d="M22.8439 4.38619V8.40755C22.4437 8.32752 22.0436 8.28751 21.6435 8.28751C20.5031 8.28751 19.5828 8.61762 18.8825 9.27784C18.1823 9.91806 17.8322 10.9784 17.8322 12.4589V19.2112H13.8408V4.44621H17.7121V6.63695C18.4324 5.09643 19.8328 4.32617 21.9135 4.32617C22.1336 4.32617 22.4437 4.34618 22.8439 4.38619Z" fill="#BD35D8"/><path d="M33.3418 19.9782L36.943 19.0178C37.0831 19.8381 37.4632 20.5083 38.0834 21.0285C38.7036 21.5487 39.4739 21.8088 40.3942 21.8088C43.0151 21.8088 44.3255 20.4383 44.3255 17.6974V16.617C43.9854 17.1572 43.4652 17.6074 42.765 17.9675C42.0647 18.3276 41.2145 18.5077 40.2141 18.5077C38.2535 18.5077 36.6129 17.8274 35.2925 16.467C33.992 15.1065 33.3418 13.3959 33.3418 11.3352C33.3418 9.33457 33.992 7.63399 35.2925 6.23352C36.5929 4.83305 38.2334 4.13281 40.2141 4.13281C41.2945 4.13281 42.1948 4.33288 42.915 4.73302C43.6353 5.11314 44.1354 5.5833 44.4155 6.14349V4.4029H48.2568V17.5773C48.2568 19.7981 47.6166 21.6387 46.3362 23.0992C45.0557 24.5797 43.1151 25.32 40.5142 25.32C38.5736 25.32 36.943 24.7998 35.6226 23.7594C34.3221 22.7191 33.5619 21.4587 33.3418 19.9782ZM40.9043 15.0865C41.9247 15.0865 42.755 14.7464 43.3952 14.0662C44.0554 13.3859 44.3855 12.4756 44.3855 11.3352C44.3855 10.2149 44.0454 9.31456 43.3652 8.63433C42.705 7.9541 41.8847 7.61399 40.9043 7.61399C39.884 7.61399 39.0337 7.9541 38.3535 8.63433C37.6933 9.31456 37.3632 10.2149 37.3632 11.3352C37.3632 12.4756 37.6933 13.3859 38.3535 14.0662C39.0137 14.7464 39.864 15.0865 40.9043 15.0865Z" fill="#51246B"/><path d="M53.4286 10.0881H60.0308C59.9908 9.26783 59.6907 8.5776 59.1305 8.01741C58.5903 7.45722 57.7901 7.17713 56.7297 7.17713C55.7694 7.17713 54.9891 7.47723 54.3889 8.07743C53.7887 8.67763 53.4686 9.34786 53.4286 10.0881ZM60.4209 13.9294L63.7521 14.9197C63.3519 16.2802 62.5617 17.4006 61.3813 18.2809C60.2209 19.1612 58.7704 19.6013 57.0298 19.6013C54.9091 19.6013 53.1085 18.8911 51.628 17.4706C50.1475 16.0301 49.4072 14.1095 49.4072 11.7087C49.4072 9.42789 50.1275 7.56726 51.568 6.12677C53.0084 4.66628 54.709 3.93604 56.6697 3.93604C58.9504 3.93604 60.731 4.61626 62.0115 5.97672C63.3119 7.33718 63.9621 9.20781 63.9621 11.5886C63.9621 11.7487 63.9521 11.9287 63.9321 12.1288C63.9321 12.3289 63.9321 12.4889 63.9321 12.609L63.9021 12.819H53.3386C53.3786 13.7794 53.7587 14.5796 54.4789 15.2198C55.1992 15.8601 56.0595 16.1802 57.0598 16.1802C58.7604 16.1802 59.8808 15.4299 60.4209 13.9294Z" fill="#51246B"/><path d="M30.0834 4.41158H33.0544V7.95266H30.0834V14.1348C30.0834 14.755 30.2235 15.1951 30.5036 15.4552C30.7837 15.7153 31.2238 15.8453 31.824 15.8453C32.3641 15.8453 32.7743 15.8054 33.0544 15.7254V19.0265C32.4742 19.2666 31.724 19.3866 30.8037 19.3866C29.3632 19.3866 28.2227 18.9865 27.3824 18.1862C26.5421 17.366 26.122 16.2455 26.122 14.8251V7.95266H23.4512V4.42005H26.481V2.1355C26.4814 2.11402 26.4821 2.09243 26.4821 2.07071V0H30.0834V4.41158Z" fill="#BD35D8"/><rect x="33.0547" y="21.3281" width="3.99161" height="33.0546" transform="rotate(90 33.0547 21.3281)" fill="#BD35D8"/></svg>`;
 
 /** @param {unknown} meta */
 function leadMetaPhoneStep(meta) {
   return Boolean(
     meta && typeof meta === "object" && meta.lead_flow && meta.lead_step === "phone"
   );
+}
+
+/** @param {unknown} payload */
+function isActiveLeadFlowPayload(payload) {
+  const m = payload?.meta;
+  if (!m || typeof m !== "object" || !m.lead_flow) return false;
+  const step = String(m.lead_step || "");
+  return Boolean(step && step !== "done");
 }
 
 /** 10 цифр после «7» (пользователь может ввести 9… или 8… или уже +7…) */
@@ -75,7 +75,9 @@ function ruPhoneToBackendE164(inputVal) {
 /**
  * @typedef {Object} StarterPrompt
  * @property {string} label
- * @property {string} q
+ * @property {string} [q]
+ * @property {string} [videoKey] — открыть каталог клиента без текста запроса
+ * @property {boolean} [soon] — кнопка видна, но пока не подключена
  */
 
 /**
@@ -87,6 +89,11 @@ function ruPhoneToBackendE164(inputVal) {
  * @property {string} onlineLabel
  * @property {string} welcomeText
  * @property {StarterPrompt[]} starterPrompts
+ * @property {Record<string, {src?: string, title?: string}>} [videoCatalog]
+ * @property {"vertical"|"horizontal"} [videoAspect] — пропорции блока в ленте (9:16 или 16:9)
+ * @property {boolean} [demoLauncher] — крупная карточка-превью с кнопкой (по умолчанию true)
+ * @property {string} [launcherCtaLabel] — подпись кнопки запуска
+ * @property {string} [launcherSubtitle] — подзаголовок на превью
  */
 
 /**
@@ -104,10 +111,11 @@ function botTurnFromPayload(data) {
     ctaRaw && typeof ctaRaw === "object" && ctaRaw.text
       ? { text: String(ctaRaw.text), action: String(ctaRaw.action || "lead") }
       : null;
-  const videoKey =
-    data.video && typeof data.video === "object" && data.video.key
-      ? String(data.video.key)
-      : null;
+  const vp = data.video && typeof data.video === "object" ? data.video : null;
+  const vk = vp?.key ? String(vp.key).trim() : "";
+  const vSrc = vp?.src ? String(vp.src).trim() : "";
+  const vTit = vp?.title ? String(vp.title).trim() : "";
+  const hasPlayableVideo = Boolean(vSrc);
 
   return {
     role: "bot",
@@ -115,7 +123,10 @@ function botTurnFromPayload(data) {
     followups: followups.filter((x) => x && x.ref),
     quickReplies: quickReplies.filter((x) => x && x.ref),
     linksDismissed: false,
-    videoKey,
+    videoKey: hasPlayableVideo ? vk : "",
+    videoSrc: hasPlayableVideo ? vSrc : "",
+    videoTitleText: hasPlayableVideo ? vTit : "",
+    videoRevealed: false,
     situation: sit ? { show: Boolean(sit.show), mode: sit.mode || "normal" } : null,
     cta,
     trailingDismissed: false,
@@ -297,12 +308,68 @@ export function mountWidget(root, config) {
     messages: [],
     lastPayload: null,
     pending: false,
+    /** @type {"searching"|"writing"} */
+    typingPhase: "searching",
     unread: false,
     started: false,
     errorLine: "",
     welcomeAnimActive: false,
     welcomeStreamDone: false,
   };
+
+  /** @type {Record<string, { src: string, title: string }>} */
+  const videoCatalogResolved = {};
+
+  /** @param {unknown} patch */
+  function ingestVideoCatalog(patch) {
+    if (!patch || typeof patch !== "object") return;
+    for (const [k, raw] of Object.entries(patch)) {
+      if (!raw || typeof raw !== "object") continue;
+      const src = String(/** @type {{ src?: unknown }} */ (raw).src || "").trim();
+      if (!src) continue;
+      videoCatalogResolved[String(k)] = {
+        src,
+        title: String(/** @type {{ title?: unknown }} */ (raw).title || "").trim(),
+      };
+    }
+  }
+  ingestVideoCatalog(config.videoCatalog);
+
+  function mediaPlayUrl(key) {
+    const base = (apiBase || "").replace(/\/$/, "");
+    return `${base}/api/media/${encodeURIComponent(key)}?client_id=${encodeURIComponent(clientId)}`;
+  }
+
+  /** @param {string} [src] @param {string} [key] */
+  function resolvePlaySrc(src, key) {
+    const k = String(key || "").trim();
+    if (k) return mediaPlayUrl(k);
+    const s = String(src || "").trim();
+    if (!s) return "";
+    if (s.startsWith("/api/media/")) {
+      const base = (apiBase || "").replace(/\/$/, "");
+      return base ? `${base}${s}` : s;
+    }
+    return s;
+  }
+
+  let catalogFetchPromise = null;
+
+  function fetchVideoCatalog() {
+    if (!catalogFetchPromise) {
+      catalogFetchPromise = (async () => {
+        const base = (apiBase || "").replace(/\/$/, "");
+        const url = `${base}/api/video-catalog?client_id=${encodeURIComponent(clientId)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("video_catalog_failed");
+        const data = await res.json();
+        ingestVideoCatalog(data.videos);
+      })().catch(() => {
+        catalogFetchPromise = null;
+      });
+    }
+    return catalogFetchPromise;
+  }
 
   let welcomeStreamTimer = 0;
 
@@ -395,18 +462,47 @@ export function mountWidget(root, config) {
     startWelcomeTextStream(textP, textBody, card, startAt);
   }
 
-  root.innerHTML = `
-    <div class="clinic-shell" data-clinic-root>
+  const useDemoLauncher = config.demoLauncher !== false;
+  const launcherCtaLabel = String(config.launcherCtaLabel || "Запустить демо").trim();
+  const launcherSubtitle = String(
+    config.launcherSubtitle || "Демо ИИ-консультанта клиники"
+  ).trim();
+
+  const launcherHtml = useDemoLauncher
+    ? `
+      <div class="clinic-shell__launcher clinic-shell__launcher--demo" data-clinic-launcher>
+        <div class="clinic-shell__launcher-card">
+          <span class="clinic-shell__unread clinic-shell__unread--launcher" data-clinic-unread aria-hidden="true"></span>
+          <div class="clinic-shell__launcher-body">
+            <div class="clinic-shell__launcher-avatar">
+              <span class="clinic-shell__avatar-fallback" data-clinic-avatar-fb>
+                <img class="clinic-shell__avatar-fallback-img" alt="" width="48" height="48" data-clinic-avatar />
+              </span>
+              <span class="clinic-shell__header-online-dot" aria-hidden="true"></span>
+            </div>
+            <div class="clinic-shell__launcher-text">
+              <span class="clinic-shell__name clinic-shell__name--launcher" data-clinic-launcher-name></span>
+              <span class="clinic-shell__launcher-subtitle" data-clinic-launcher-subtitle></span>
+            </div>
+          </div>
+          <button type="button" class="clinic-shell__launcher-cta" data-clinic-launcher-open aria-controls="clinic-panel"></button>
+        </div>
+      </div>`
+    : `
       <button type="button" class="clinic-shell__launcher" data-clinic-launcher aria-expanded="false" aria-controls="clinic-panel">
         <span class="clinic-shell__unread" data-clinic-unread aria-hidden="true"></span>
         <span class="clinic-shell__avatar-fallback" data-clinic-avatar-fb>
-          <img class="clinic-shell__avatar-fallback-img" alt="" width="40" height="40" data-clinic-avatar />
+          <img class="clinic-shell__avatar-fallback-img" alt="" width="48" height="48" data-clinic-avatar />
         </span>
         <span class="clinic-shell__launcher-text">
           <span class="clinic-shell__name" data-clinic-name></span>
           <span class="clinic-shell__online" data-clinic-online></span>
         </span>
-      </button>
+      </button>`;
+
+  root.innerHTML = `
+    <div class="clinic-shell" data-clinic-root>
+      ${launcherHtml}
       <div class="clinic-shell__panel" id="clinic-panel" role="dialog" aria-modal="true" aria-label="Чат" data-clinic-panel>
         <div class="clinic-shell__frame">
           <div class="clinic-shell__surface">
@@ -440,17 +536,13 @@ export function mountWidget(root, config) {
           </div>
         </div>
       </div>
-      <div class="clinic-shell__video-overlay" data-clinic-video-overlay hidden>
-        <div class="clinic-shell__video-card" role="document">
-          <p data-clinic-video-title></p>
-          <button type="button" class="clinic-btn-ghost" data-clinic-video-close>Закрыть</button>
-        </div>
-      </div>
     </div>
   `;
 
   const shell = root.querySelector("[data-clinic-root]");
   const launcher = root.querySelector("[data-clinic-launcher]");
+  const launcherOpenBtn = root.querySelector("[data-clinic-launcher-open]");
+  if (launcherOpenBtn) launcherOpenBtn.textContent = launcherCtaLabel;
   const panel = root.querySelector("[data-clinic-panel]");
   const feed = root.querySelector("[data-clinic-feed]");
   const input = root.querySelector("[data-clinic-input]");
@@ -459,15 +551,18 @@ export function mountWidget(root, config) {
   const errBox = root.querySelector("[data-clinic-err]");
   const unreadDot = root.querySelector("[data-clinic-unread]");
   const btnClose = root.querySelector("[data-clinic-close]");
-  const videoOverlay = root.querySelector("[data-clinic-video-overlay]");
-  const videoTitle = root.querySelector("[data-clinic-video-title]");
-  const videoClose = root.querySelector("[data-clinic-video-close]");
 
   const avatarImg = root.querySelector("[data-clinic-avatar]");
   const hAvatar = root.querySelector("[data-clinic-header-avatar]");
 
-  root.querySelector("[data-clinic-name]").textContent = config.botName;
-  root.querySelector("[data-clinic-online]").textContent = config.onlineLabel;
+  const launcherNameEl = root.querySelector("[data-clinic-launcher-name]");
+  if (launcherNameEl) launcherNameEl.textContent = config.botName;
+  const compactNameEl = root.querySelector("[data-clinic-name]");
+  if (compactNameEl) compactNameEl.textContent = config.botName;
+  const compactOnlineEl = root.querySelector("[data-clinic-online]");
+  if (compactOnlineEl) compactOnlineEl.textContent = config.onlineLabel;
+  const launcherSubtitleEl = root.querySelector("[data-clinic-launcher-subtitle]");
+  if (launcherSubtitleEl) launcherSubtitleEl.textContent = launcherSubtitle;
   root.querySelector("[data-clinic-header-name]").textContent = config.botName;
   root.querySelector("[data-clinic-header-online]").textContent = config.onlineLabel;
 
@@ -476,6 +571,128 @@ export function mountWidget(root, config) {
   hAvatar.alt = alt;
   avatarImg.src = resolvedAvatarUrl;
   hAvatar.src = resolvedAvatarUrl;
+
+  const videoAspectMode =
+    config.videoAspect === "horizontal" ? "horizontal" : "vertical";
+
+  /** @param {object} m */
+  function getVideoPlayInfo(m) {
+    const key = String(m.videoKey || "").trim();
+    const src = resolvePlaySrc(m.videoSrc, key);
+    if (!src) return null;
+    const title =
+      String(m.videoTitleText || "").trim() ||
+      (key && videoCatalogResolved[key]?.title) ||
+      "";
+    return { src, title, key };
+  }
+
+  /** @param {HTMLVideoElement} except */
+  function pauseOtherInlineVideos(except) {
+    feed.querySelectorAll(".clinic-msg__video-player").forEach((node) => {
+      if (node !== except && node instanceof HTMLVideoElement) {
+        try {
+          node.pause();
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }
+
+  /**
+   * @param {HTMLElement} bubble
+   * @param {object} m
+   */
+  function appendInlineVideo(bubble, m) {
+    const info = getVideoPlayInfo(m);
+    if (!info) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = `clinic-msg__video clinic-msg__video--${videoAspectMode}`;
+
+    const vid = document.createElement("video");
+    vid.className = "clinic-msg__video-player";
+    vid.controls = true;
+    vid.playsInline = true;
+    vid.preload = "metadata";
+    vid.setAttribute("aria-label", info.title || "Видео");
+    vid.src = info.src;
+    vid.addEventListener("play", () => pauseOtherInlineVideos(vid));
+    vid.addEventListener("error", () => {
+      const err = document.createElement("p");
+      err.className = "clinic-msg__video-error";
+      err.textContent = "Не удалось загрузить видео.";
+      if (!wrap.querySelector(".clinic-msg__video-error")) wrap.appendChild(err);
+    });
+
+    wrap.appendChild(vid);
+    if (info.title) {
+      const cap = document.createElement("p");
+      cap.className = "clinic-msg__video-caption";
+      cap.textContent = info.title;
+      wrap.appendChild(cap);
+    }
+
+    bubble.classList.add("clinic-msg--has-video");
+    bubble.appendChild(wrap);
+  }
+
+  /**
+   * Кнопка «Посмотреть видео…» или плеер после нажатия.
+   * @param {HTMLElement} bubble
+   * @param {object} m
+   * @param {number} msgIndex
+   */
+  function appendVideoOffer(bubble, m, msgIndex) {
+    const info = getVideoPlayInfo(m);
+    if (!info) return;
+
+    if (m.videoRevealed) {
+      appendInlineVideo(bubble, m);
+      return;
+    }
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "clinic-msg__video-reveal";
+    btn.innerHTML = `<span class="clinic-msg__video-reveal-label">${VIDEO_REVEAL_LABEL}</span><span class="clinic-msg__video-reveal-play" aria-hidden="true">▶</span>`;
+    btn.setAttribute("aria-label", VIDEO_REVEAL_LABEL);
+    btn.addEventListener("click", () => {
+      const target = state.messages[msgIndex];
+      if (!target || target.role !== "bot") return;
+      target.videoRevealed = true;
+      renderFeed();
+    });
+    bubble.appendChild(btn);
+  }
+
+  /**
+   * @param {string} key
+   * @param {string} userLabel
+   */
+  async function pushWelcomeVideoTurn(key, userLabel) {
+    const vk = String(key || "").trim();
+    if (!vk) return;
+    await fetchVideoCatalog();
+    const cat = videoCatalogResolved[vk];
+    state.messages.push({ role: "user", text: userLabel });
+    state.messages.push({
+      role: "bot",
+      text: "Короткий комментарий врача:",
+      videoKey: vk,
+      videoSrc: cat?.src || mediaPlayUrl(vk),
+      videoTitleText: cat?.title || "",
+      videoRevealed: false,
+      followups: [],
+      quickReplies: [],
+      linksDismissed: false,
+      situation: null,
+      cta: null,
+      trailingDismissed: false,
+    });
+    renderFeed();
+  }
 
   setOpen(false);
   autoResizeTextarea(input);
@@ -511,21 +728,31 @@ export function mountWidget(root, config) {
     clearStoredSid();
     state.messages = [];
     state.lastPayload = null;
+    state.typingPhase = "searching";
     state.started = false;
     state.welcomeAnimActive = false;
     state.welcomeStreamDone = false;
     state.unread = false;
     unreadDot.classList.remove("is-visible");
     setError("");
-    videoOverlay.hidden = true;
+    pauseOtherInlineVideos(/** @type {HTMLVideoElement} */ (null));
     input.value = "";
     renderFeed();
+  }
+
+  function openChatFromLauncher() {
+    if (state.isOpen) return;
+    setOpen(true);
+    renderFeed();
+    maybeStartWelcomeStream();
   }
 
   function setOpen(open) {
     state.isOpen = open;
     shell.classList.toggle("is-open", open);
-    launcher.setAttribute("aria-expanded", open ? "true" : "false");
+    if (launcher) {
+      launcher.setAttribute("aria-expanded", open ? "true" : "false");
+    }
     panel.setAttribute("aria-hidden", open ? "false" : "true");
     if (open) {
       state.unread = false;
@@ -538,6 +765,137 @@ export function mountWidget(root, config) {
       }
       launcher.focus();
     }
+  }
+
+  /** @returns {string} */
+  function typingLabelForPhase(phase) {
+    return phase === "writing" ? TYPING_LABEL_WRITING : TYPING_LABEL_SEARCHING;
+  }
+
+  function updateTypingIndicatorText() {
+    const el = feed.querySelector(".clinic-shell__typing");
+    if (el) el.textContent = typingLabelForPhase(state.typingPhase);
+  }
+
+  /** @param {Record<string, unknown>} body */
+  function shouldShowKbSearchTyping(body) {
+    if (body.cta_action === "lead") return false;
+    const ref = String(body.ref || "");
+    if (ref.startsWith("lead:")) return false;
+    if (body.situation_action || body.action === "situation") return false;
+    if (isActiveLeadFlowPayload(state.lastPayload)) return false;
+    const q = String(body.q || "").trim();
+    if (q.length >= 2 && BOOKING_INTENT_RE.test(q)) return false;
+    return true;
+  }
+
+  /** @param {Record<string, unknown>} [body] */
+  function beginPendingRequest(body = {}) {
+    state.pending = true;
+    state.typingPhase = shouldShowKbSearchTyping(body) ? "searching" : "writing";
+    renderFeed();
+  }
+
+  /** @param {"searching"|"writing"} phase */
+  function setTypingPhase(phase) {
+    const next = phase === "writing" ? "writing" : "searching";
+    if (state.typingPhase === next) return;
+    state.typingPhase = next;
+    updateTypingIndicatorText();
+  }
+
+  function endPendingRequest() {
+    state.pending = false;
+    state.typingPhase = "searching";
+  }
+
+  /**
+   * @param {HTMLElement} feed
+   * @param {string} resolvedAvatarUrl
+   * @param {string} apiBase
+   * @param {Record<string, unknown>} body
+   */
+  function runStreamAsk(feed, resolvedAvatarUrl, apiBase, body) {
+    let liveBubble = null;
+    let fullText = "";
+    let uiData = null;
+    let writingRevealTimer = 0;
+
+    const revealLiveBubble = () => {
+      if (writingRevealTimer) {
+        clearTimeout(writingRevealTimer);
+        writingRevealTimer = 0;
+      }
+      if (!liveBubble && fullText.length > 0) {
+        liveBubble = _createLiveBubble(feed, resolvedAvatarUrl);
+        _updateLiveBubble(liveBubble, fullText, feed);
+      } else if (liveBubble) {
+        _updateLiveBubble(liveBubble, fullText, feed);
+      }
+    };
+
+    return streamAsk(apiBase, body, {
+      onTyping(phase) {
+        setTypingPhase(phase);
+      },
+      onDelta(delta) {
+        const chunk = String(delta || "");
+        if (!chunk) return;
+        fullText += chunk;
+
+        if (!liveBubble) {
+          if (state.typingPhase === "searching") {
+            state.typingPhase = "writing";
+            updateTypingIndicatorText();
+            if (!writingRevealTimer) {
+              writingRevealTimer = window.setTimeout(revealLiveBubble, TYPING_WRITING_MIN_MS);
+            }
+            return;
+          }
+          if (state.typingPhase === "writing" && !writingRevealTimer) {
+            revealLiveBubble();
+            return;
+          }
+        }
+
+        if (liveBubble) {
+          _updateLiveBubble(liveBubble, fullText, feed);
+        }
+      },
+      onUi(data) {
+        uiData = data;
+      },
+      onDone() {
+        if (writingRevealTimer) {
+          clearTimeout(writingRevealTimer);
+          writingRevealTimer = 0;
+        }
+        if (!liveBubble && fullText.length > 0) {
+          revealLiveBubble();
+        }
+        if (uiData) {
+          if (uiData.meta && uiData.meta.sid) setSid(uiData.meta.sid);
+          const turn = botTurnFromPayload(uiData);
+          if (turn && turn.text) state.messages.push(turn);
+          state.lastPayload = uiData;
+          if (!state.isOpen) state.unread = true;
+        }
+        endPendingRequest();
+        if (state.unread && !state.isOpen) unreadDot.classList.add("is-visible");
+        renderFeed();
+        syncSendState();
+      },
+      onError(msg) {
+        if (writingRevealTimer) {
+          clearTimeout(writingRevealTimer);
+          writingRevealTimer = 0;
+        }
+        setError(msg);
+        endPendingRequest();
+        renderFeed();
+        syncSendState();
+      },
+    });
   }
 
   function setError(msg) {
@@ -605,21 +963,6 @@ export function mountWidget(root, config) {
 
     const trail = document.createElement("div");
     trail.className = "clinic-turn__trail";
-
-    if (m.videoKey) {
-      const key = m.videoKey;
-      const vr = document.createElement("button");
-      vr.type = "button";
-      vr.className = "clinic-turn__btn clinic-turn__btn--video";
-      vr.innerHTML =
-        '<span class="clinic-turn__btn-label">Видео</span><span class="clinic-turn__btn-play" aria-hidden="true">▶</span>';
-      vr.setAttribute("aria-label", `Видео, ${key}`);
-      vr.addEventListener("click", () => {
-        videoTitle.textContent = `Видео (key: ${key}). Плеер — по договорённости в ТЗ.`;
-        videoOverlay.hidden = false;
-      });
-      trail.appendChild(vr);
-    }
 
     const sit = m.situation;
     if (sit && sit.show && sit.mode === "normal") {
@@ -701,14 +1044,7 @@ export function mountWidget(root, config) {
       const logo = document.createElement("div");
       logo.className = "clinic-shell__welcome-logo";
       logo.innerHTML = WELCOME_LOGO_SVG;
-
-      for (const key of /** @type {const} */ (["one", "two", "three"])) {
-        const star = document.createElement("span");
-        star.className = `clinic-shell__welcome-star clinic-shell__welcome-star--${key}`;
-        star.innerHTML = WELCOME_STAR_SVG;
-        logoWrap.appendChild(star);
-      }
-      logoWrap.insertBefore(logo, logoWrap.firstChild);
+      logoWrap.appendChild(logo);
 
       const lead = document.createElement("div");
       lead.className = "clinic-shell__welcome-lead";
@@ -737,13 +1073,28 @@ export function mountWidget(root, config) {
         const b = document.createElement("button");
         b.type = "button";
         b.className = "clinic-shell__welcome-action";
+        if (s.soon) b.classList.add("clinic-shell__welcome-action--soon");
         b.textContent = s.label;
-        b.addEventListener("click", () => {
-          transitionFromWelcome(() => {
-            input.value = s.q;
-            void sendFromComposer();
+        if (s.soon) {
+          b.disabled = true;
+          b.setAttribute("aria-disabled", "true");
+          b.title = "Скоро";
+        } else if (s.videoKey) {
+          const vk = String(s.videoKey).trim();
+          const label = s.label || "Видео";
+          b.addEventListener("click", () => {
+            transitionFromWelcome(() => {
+              void pushWelcomeVideoTurn(vk, label);
+            });
           });
-        });
+        } else {
+          b.addEventListener("click", () => {
+            transitionFromWelcome(() => {
+              input.value = String(s.q || s.label || "").trim();
+              void sendFromComposer();
+            });
+          });
+        }
         actions.appendChild(b);
       }
 
@@ -776,10 +1127,14 @@ export function mountWidget(root, config) {
       row.className = "clinic-row clinic-row--bot";
       const bubble = document.createElement("div");
       bubble.className = "clinic-msg clinic-msg--bot";
-      const body = document.createElement("div");
-      body.className = "clinic-msg__body";
-      body.textContent = m.text;
-      bubble.appendChild(body);
+      const text = String(m.text || "").trim();
+      if (text) {
+        const body = document.createElement("div");
+        body.className = "clinic-msg__body";
+        body.textContent = text;
+        bubble.appendChild(body);
+      }
+      appendVideoOffer(bubble, m, idx);
       renderInlineLinks(bubble, m, idx);
       row.appendChild(createBotAvatarEl(resolvedAvatarUrl));
       row.appendChild(bubble);
@@ -790,7 +1145,7 @@ export function mountWidget(root, config) {
 
     const typingWrap = document.createElement("div");
     typingWrap.className = "clinic-shell__typing-wrap";
-    typing.textContent = "Бот печатает…";
+    typing.textContent = typingLabelForPhase(state.typingPhase);
     typingWrap.appendChild(createBotAvatarEl(resolvedAvatarUrl));
     typingWrap.appendChild(typing);
     typingWrap.classList.toggle("is-visible", state.pending);
@@ -869,40 +1224,8 @@ export function mountWidget(root, config) {
     if (body.q === undefined) body.q = "";
 
     setError("");
-    state.pending = true;
-    renderFeed();
-
-    let liveBubble = null;
-    let fullText = "";
-    let uiData = null;
-
-    await streamAsk(apiBase, body, {
-      onDelta(delta) {
-        fullText += delta;
-        if (!liveBubble) liveBubble = _createLiveBubble(feed, resolvedAvatarUrl);
-        _updateLiveBubble(liveBubble, fullText, feed);
-      },
-      onUi(data) {
-        uiData = data;
-      },
-      onDone() {
-        if (uiData) {
-          if (uiData.meta && uiData.meta.sid) setSid(uiData.meta.sid);
-          const turn = botTurnFromPayload(uiData);
-          if (turn && turn.text) state.messages.push(turn);
-          state.lastPayload = uiData;
-          if (!state.isOpen) state.unread = true;
-        }
-        state.pending = false;
-        if (state.unread && !state.isOpen) unreadDot.classList.add("is-visible");
-        renderFeed();
-      },
-      onError(msg) {
-        setError(msg);
-        state.pending = false;
-        renderFeed();
-      },
-    });
+    beginPendingRequest(body);
+    await runStreamAsk(feed, resolvedAvatarUrl, apiBase, body);
   }
 
   async function sendFromComposer() {
@@ -930,42 +1253,9 @@ export function mountWidget(root, config) {
       setError("");
 
       const sid = getSid();
-      state.pending = true;
-      renderFeed();
-
-      let liveBubble = null;
-      let fullText = "";
-      let uiData = null;
-
-      await streamAsk(apiBase, { client_id: clientId, sid, q }, {
-      onDelta(delta) {
-        fullText += delta;
-        if (!liveBubble) liveBubble = _createLiveBubble(feed, resolvedAvatarUrl);
-        _updateLiveBubble(liveBubble, fullText, feed);
-      },
-      onUi(data) {
-        uiData = data;
-      },
-      onDone() {
-        if (uiData) {
-          if (uiData.meta && uiData.meta.sid) setSid(uiData.meta.sid);
-          const turn = botTurnFromPayload(uiData);
-          if (turn && turn.text) state.messages.push(turn);
-          state.lastPayload = uiData;
-          if (!state.isOpen) state.unread = true;
-        }
-        state.pending = false;
-        if (state.unread && !state.isOpen) unreadDot.classList.add("is-visible");
-        renderFeed();
-        syncSendState();
-      },
-      onError(msg) {
-        setError(msg);
-        state.pending = false;
-        renderFeed();
-        syncSendState();
-      },
-    });
+      const askBody = { client_id: clientId, sid, q };
+      beginPendingRequest(askBody);
+      await runStreamAsk(feed, resolvedAvatarUrl, apiBase, askBody);
     };
 
     if (!state.started && feed.querySelector(".clinic-shell__welcome-screen")) {
@@ -1018,11 +1308,17 @@ export function mountWidget(root, config) {
     sendBtn.disabled = !input.value.trim();
   }
 
-  launcher.addEventListener("click", () => {
-    setOpen(!state.isOpen);
-    renderFeed();
-    if (state.isOpen) maybeStartWelcomeStream();
-  });
+  if (launcherOpenBtn) {
+    launcherOpenBtn.addEventListener("click", () => {
+      openChatFromLauncher();
+    });
+  } else if (launcher) {
+    launcher.addEventListener("click", () => {
+      setOpen(!state.isOpen);
+      renderFeed();
+      if (state.isOpen) maybeStartWelcomeStream();
+    });
+  }
 
   btnClose.addEventListener("click", () => {
     setOpen(false);
@@ -1042,21 +1338,15 @@ export function mountWidget(root, config) {
     void sendFromComposer();
   });
 
-  videoClose.addEventListener("click", () => {
-    videoOverlay.hidden = true;
-  });
-
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && state.isOpen) {
-      if (!videoOverlay.hidden) {
-        videoOverlay.hidden = true;
-      } else {
-        setOpen(false);
-      }
+      setOpen(false);
     }
   });
 
   renderFeed();
+
+  void fetchVideoCatalog().then(() => renderFeed());
 
   attachDevResetControl(resetSession);
 

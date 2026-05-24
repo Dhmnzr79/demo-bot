@@ -463,14 +463,28 @@ def build_price_clarify_payload(
     client_id: str | None,
     intent: str,
     fallback_reason: str,
+    question: str = "",
 ) -> dict:
+    from core.clinic_policies_loader import (
+        build_service_not_offered_answer,
+        find_service_alternative_note,
+        service_alternative_quick_replies,
+    )
+
+    cid = (client_id or "").strip() or "default"
+    if find_service_alternative_note(question, cid):
+        answer = build_service_not_offered_answer(cid, question=question)
+        quick_replies = service_alternative_quick_replies(question, cid)
+    else:
+        answer = (
+            "Не могу определить услугу для расчёта цены. "
+            "Напишите, пожалуйста, что именно вас интересует — "
+            "или запишитесь на консультацию, там всё посчитают."
+        )
+        quick_replies = []
     return {
-        "answer": (
-            "Это демо-бот, и такой информации нет в базе данных. "
-            "Если её добавить, я смогу помочь вашим клиентам с этим вопросом. "
-            "А пока можете спросить про что-нибудь другое."
-        ),
-        "quick_replies": [],
+        "answer": answer,
+        "quick_replies": quick_replies,
         "cta": None,
         "video": None,
         "situation": {"show": False, "mode": "normal"},

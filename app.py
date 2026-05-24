@@ -11,7 +11,14 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
-from flask import Flask, jsonify, request, send_from_directory, stream_with_context
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    request,
+    send_from_directory,
+    stream_with_context,
+)
 import session as session_mod
 from pg_sink import enqueue_v5_turn_trace, init_pg_sink
 
@@ -32,6 +39,7 @@ from config import (
 )
 from contracts.ask_orchestration import AskOrchestrationResult
 from core.routing_loader import THRESHOLDS
+from core.video_catalog_loader import catalog_for_widget, get_external_video_src
 from lead_service import handle_lead
 from logging_setup import LOG_FILE, emit_bot_event, get_logger, make_request_context, log_json, redact_text
 from chunk_responder import respond_from_chunk, respond_from_chunk_stream
@@ -73,6 +81,7 @@ from session import (
     mem_add_bot,
     mem_add_user,
     mem_get,
+    is_active_lead_flow,
     mem_reset,
     parse_yes,
     record_last_bot_payload,
@@ -140,22 +149,20 @@ APP_ENV = (os.getenv("APP_ENV") or "local").strip().lower()
 _APPLY_POLICY_PARAMS = inspect.signature(apply_response_policy).parameters
 init_pg_sink(logger)
 TXT = {
-    "lead_name_prompt": (
-        "Это демо-бот: заявка никуда не уйдёт, но можно пройти сценарий записи. "
-        "Как к вам можно обращаться?"
-    ),
+    "lead_name_prompt": "Хорошо, помогу с записью. Как к вам можно обращаться?",
     "lead_name_retry": "Как к вам можно обращаться? Напишите, пожалуйста, имя.",
     "lead_name_hard": "Напишите просто имя — например, Мария или Андрей.",
     "lead_name_invalid": "Не совсем поняла — напишите просто имя, например Мария.",
     "lead_name_confirm_tpl": "Вас зовут {name}, правильно?",
     "lead_name_reenter": "Хорошо. Как к вам можно обращаться?",
     "lead_phone_prompt_tpl": (
-        "{name}, введите номер телефона — в демо это только имитация шага, звонков не будет."
+        "{name}, оставьте, пожалуйста, номер телефона — администратор свяжется с вами, "
+        "чтобы подтвердить запись."
     ),
     "lead_phone_retry": "Не получилось распознать номер. Напишите в формате +7XXXXXXXXXX.",
     "lead_submit_ok": (
-        "Спасибо. Это демонстрационный бот: заявка не отправлена и данные никуда не передавались. "
-        "На промо-сайте так показывают сценарий записи."
+        "Спасибо! Это демо-бот: заявка никуда не ушла, звонка не будет. "
+        "В рабочем боте для клиники после телефона заявка автоматически придёт вам на почту и в CRM."
     ),
     "lead_submit_error": "Что-то пошло не так. Проверьте номер и попробуйте ещё раз.",
     "situation_prompt": (
@@ -166,7 +173,10 @@ TXT = {
         "Напишите чуть подробнее — буквально 1–2 фразы. "
         "Чем точнее, тем лучше врач подготовится."
     ),
-    "situation_to_lead_name": "Спасибо. Как к вам можно обращаться?",
+    "situation_to_lead_name": (
+        "Спасибо, записала. Эту информацию передадим в клинику, "
+        "чтобы врач заранее понимал вашу ситуацию. Как к вам можно обращаться?"
+    ),
     "situation_back_fallback": "Хорошо, продолжим. Задайте вопрос или выберите тему.",
     "followup_choose_topic": "Могу рассказать про этапы или про сроки — что выбрать?",
 }
@@ -1059,7 +1069,8 @@ def _orchestrate_ask_turn(data: dict):
     if not _check_rate_limit(ip):
         log_json(logger, 'rate_limited', sid=sid, client_id=client_id, ip=ip)
         return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=_rate_limited_response_payload(), service_route='rate_limited', http_status=429)
-    if _is_obvious_noise(q):
+    st = mem_get(sid)
+    if _is_obvious_noise(q) and not is_active_lead_flow(st):
         noise_res = _obvious_noise_ingress_result()
         log_json(logger, 'obvious_noise_short_circuit', sid=sid, client_id=client_id)
         return AskOrchestrationResult(
@@ -1073,7 +1084,11 @@ def _orchestrate_ask_turn(data: dict):
             service_route=ingress_service_route(noise_res),
             decision_frame=_orch_decision_dump(decision),
         )
-    ingress_skip = bool(ref)
+    ingress_skip = (
+        bool(ref)
+        or is_active_lead_flow(st)
+        or bool(st.get("situation_pending"))
+    )
     if q and not ingress_skip:
         ingress_res = classify_ingress(q, client_id=client_id, sid=sid, skip=False)
         log_json(
@@ -1100,7 +1115,6 @@ def _orchestrate_ask_turn(data: dict):
                 service_route=ingress_service_route(ingress_res),
                 decision_frame=_orch_decision_dump(decision),
             )
-    st = mem_get(sid)
     flow_result = handle_flows(data=data, st=st, sid=sid, q=q, client_id=client_id, txt=TXT, service_payload=_service_payload, get_last_content_ui_payload=_get_last_content_ui_payload_compat, get_topic_state=get_topic_state)
     if flow_result is not None:
         redirect_ref = (flow_result.get('redirect_ref') or '').strip()
@@ -1355,6 +1369,7 @@ def _orchestrate_ask_turn(data: dict):
                     client_id=client_id,
                     intent=str(pr_cl.get('intent') or 'price_lookup'),
                     fallback_reason=str(pr_cl.get('fallback_reason') or 'service_not_found'),
+                    question=q,
                 )
                 log_json(logger, 'price_route', **payload_cl.get('meta') or {})
                 return AskOrchestrationResult(
@@ -1381,7 +1396,13 @@ def _orchestrate_ask_turn(data: dict):
     if intent == 'price_lookup':
         price_route = select_price_service_route(q, client_id=client_id, sid=sid, intent_override='price_lookup')
         if price_route.get('mode') == 'clarify':
-            payload = build_price_clarify_payload(sid=sid, client_id=client_id, intent=str(price_route.get('intent') or 'other'), fallback_reason=str(price_route.get('fallback_reason') or 'service_not_found'))
+            payload = build_price_clarify_payload(
+                sid=sid,
+                client_id=client_id,
+                intent=str(price_route.get('intent') or 'other'),
+                fallback_reason=str(price_route.get('fallback_reason') or 'service_not_found'),
+                question=q,
+            )
             log_json(logger, 'price_route', **payload.get('meta') or {})
             return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=payload, service_doc_id=None, service_track_user=True, service_route='price_lookup', decision_frame=_orch_decision_dump(decision))
         if price_route.get('mode') == 'matched':
@@ -1661,6 +1682,31 @@ _SSE_HEADERS = {
 }
 
 
+def _sse_typing_phase(*, kind: str, route: str | None) -> str:
+    """Фаза индикатора в виджете: searching = «база знаний», writing = только «печатает»."""
+    if kind == "chunk":
+        return "searching"
+    r = (route or "").strip().lower()
+    if r.startswith("ingress_"):
+        return "writing"
+    if r in {
+        "lead_flow",
+        "booking_flow",
+        "duplicate_short_circuit",
+        "rate_limited",
+        "guided",
+        "error",
+    }:
+        return "writing"
+    if r in {"price_lookup", "price_concern", "catalog_facts", "retrieval_no_candidates", "low_score_fallback"}:
+        return "searching"
+    return "writing"
+
+
+def _sse_typing_line(phase: str) -> str:
+    return f"event: typing\ndata: {json.dumps({'phase': phase}, ensure_ascii=False)}\n\n"
+
+
 def _sse_service_reply(
     payload: dict,
     sid: str,
@@ -1686,7 +1732,10 @@ def _sse_service_reply(
     if answer:
         mem_add_bot(sid, answer)
 
+    phase = _sse_typing_phase(kind="service_reply", route=route)
+
     def _gen():
+        yield _sse_typing_line(phase)
         yield f"event: ui\ndata: {json.dumps(_sanitize(out), ensure_ascii=False)}\n\n"
         yield "event: done\ndata: {}\n\n"
 
@@ -1760,10 +1809,11 @@ def _dispatch_orchestration_sse(orch_r: AskOrchestrationResult):
 @app.post("/ask/stream")
 def ask_stream():
     """Стриминговый вариант /ask. Протокол SSE:
+      event: typing      data: {"phase":"searching"|"writing"} — фаза индикатора (первым)
       event: text_delta  data: {"delta": "..."}   — токены ответа
       event: ui          data: {полный payload}    — UI элементы после генерации
       event: done        data: {}                  — конец стрима
-    Direct-ответы (цены, контакты, flow) отдают сразу один ui + done без text_delta.
+    Direct-ответы (цены, контакты, flow) отдают typing + ui + done без text_delta.
     """
     q = ""
     request.ctx["turn_t0_monotonic"] = time.monotonic()
@@ -1847,6 +1897,65 @@ def dbg():
             "alias_selected": alias_summary,
             "candidates": c,
         }
+    )
+
+
+@app.get("/api/video-catalog")
+def api_video_catalog():
+    """Публичный каталог медиа по client_id для виджета (play-URL через прокси)."""
+    client_id = resolve_client_id(request.args.get("client_id"))
+    if client_id is None:
+        return jsonify({"error": "unknown_client"}), 403
+    return jsonify({"client_id": client_id, "videos": catalog_for_widget(client_id)}), 200
+
+
+@app.get("/api/media/<video_key>")
+def api_media_proxy(video_key: str):
+    """Прокси MP4 с S3 — same-origin для виджета (Range, без CORS)."""
+    import urllib.error
+    import urllib.request
+
+    client_id = resolve_client_id(request.args.get("client_id"))
+    if client_id is None:
+        return jsonify({"error": "unknown_client"}), 403
+    external = get_external_video_src(client_id=client_id, video_key=video_key)
+    if not external:
+        return jsonify({"error": "not_found"}), 404
+
+    upstream_headers = {"User-Agent": "demo-bot-media-proxy/1"}
+    range_header = request.headers.get("Range")
+    if range_header:
+        upstream_headers["Range"] = range_header
+
+    req = urllib.request.Request(external, headers=upstream_headers, method="GET")
+    try:
+        upstream = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as exc:
+        body = exc.read() if exc.fp else b""
+        return Response(body, status=exc.code)
+
+    resp_headers = {
+        "Content-Type": upstream.headers.get("Content-Type", "video/mp4"),
+        "Accept-Ranges": upstream.headers.get("Accept-Ranges", "bytes"),
+    }
+    for h in ("Content-Length", "Content-Range"):
+        if upstream.headers.get(h):
+            resp_headers[h] = upstream.headers[h]
+
+    def generate():
+        try:
+            while True:
+                chunk = upstream.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            upstream.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=getattr(upstream, "status", 200) or 200,
+        headers=resp_headers,
     )
 
 

@@ -57,15 +57,15 @@
     "expected_offered": true
   },
   {
-    "id": "ingress_doctor_name_khan",
-    "question": "Можно к Хану?",
+    "id": "ingress_doctor_name_volkov",
+    "question": "Можно к Волкову?",
     "mode": "offered_check",
     "expected_offered": true
   },
   {
-    "id": "ingress_periodontist_not_offered",
+    "id": "ingress_periodontist_offered",
     "question": "Есть ли у вас пародонтолог?",
     "mode": "offered_check",
-    "expected_offered": false
+    "expected_offered": true
   }
 ]

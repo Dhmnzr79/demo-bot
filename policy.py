@@ -1,6 +1,8 @@
 """Детерминированные правила до/после LLM; намерение записи — regex + при необходимости LLM."""
 import os
+
 from config import BOOKING_INTENT_LLM_ON, BOOKING_INTENT_RE, CONTACTS_RE, PRICES_RE
+from core.video_catalog_loader import resolve_video_payload
 from llm import classify_booking_wants_appointment
 from retriever import chunk_doc_type
 from session import is_active_lead_flow
@@ -246,11 +248,15 @@ def apply_response_policy(
 
     payload["quick_replies"] = decision["refs"] if decision["show_refs"] else []
     payload["cta"] = payload.get("cta") if decision["show_cta"] else None
-    payload["video"] = (
-        {"key": doc_meta.get("video_key")}
-        if decision["show_video"] and doc_meta.get("video_key")
-        else None
-    )
+
+    cid = ((client_id or "").strip() or "default").strip()
+    video_payload = None
+    if decision["show_video"] and doc_meta.get("video_key"):
+        video_payload = resolve_video_payload(
+            client_id=cid,
+            video_key=str(doc_meta.get("video_key") or "").strip(),
+        )
+    payload["video"] = video_payload
 
     sit_show = bool(decision["show_situation"])
     payload["situation"] = {"show": sit_show, "mode": "normal"}
@@ -259,7 +265,7 @@ def apply_response_policy(
     meta["followups"] = decision["followups"]
     meta["topic_exhausted"] = bool(decision["topic_exhausted"])
     meta["policy_decision"] = {
-        "show_video": bool(decision["show_video"]),
+        "show_video": bool(decision["show_video"]) and payload["video"] is not None,
         "show_situation": bool(decision["show_situation"]),
         "show_refs": bool(decision["show_refs"]),
         "show_cta": bool(decision["show_cta"]),

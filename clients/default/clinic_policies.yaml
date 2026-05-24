@@ -1,6 +1,6 @@
 # Explicit clinic business constraints (not retrieved from md).
 contact:
-  phone_display: "+7 (4152) 50-01-29"
+  phone_display: "+7 (495) 128-47-60"
 
 policies:
   no_pediatric_dentistry:
@@ -38,6 +38,7 @@ service_alternatives:
   - match_keywords:
       - "брекет"
     mention: "элайнеры"
+    suggest_ref: "orthodontics__service__aligners.md#korotko"
     note: >-
       Брекеты мы не устанавливаем; для выравнивания зубов у нас есть элайнеры — прозрачные капы.
       Могу кратко рассказать про элайнеры или записать на консультацию.

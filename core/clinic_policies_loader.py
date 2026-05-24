@@ -20,6 +20,7 @@ class ServiceAlternative:
     match_keywords: tuple[str, ...]
     mention: str
     note: str
+    suggest_ref: str | None
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ def load_clinic_policies(client_id: str) -> ClinicPoliciesBundle | None:
             mk = row.get("match_keywords")
             mention = str(row.get("mention") or "").strip()
             note = str(row.get("note") or "").strip()
+            suggest_ref = str(row.get("suggest_ref") or row.get("ref") or "").strip() or None
             kw = (
                 [str(x).strip().lower() for x in mk if str(x).strip()]
                 if isinstance(mk, list)
@@ -94,7 +96,10 @@ def load_clinic_policies(client_id: str) -> ClinicPoliciesBundle | None:
             if kw and note:
                 alts_out.append(
                     ServiceAlternative(
-                        match_keywords=tuple(kw), mention=mention, note=note
+                        match_keywords=tuple(kw),
+                        mention=mention,
+                        note=note,
+                        suggest_ref=suggest_ref,
                     )
                 )
 
@@ -141,13 +146,48 @@ def policy_answer(client_id: str, policy_key: str) -> str | None:
     return None
 
 
-def find_service_alternative_note(text: str, client_id: str) -> str | None:
+def find_service_alternative(text: str, client_id: str) -> ServiceAlternative | None:
     bundle = load_clinic_policies(client_id)
     if bundle is None:
         return None
     low = (text or "").strip().lower().replace("ё", "е")
+    if not low:
+        return None
     for alt in bundle.service_alternatives:
         for kw in alt.match_keywords:
             if kw in low:
-                return alt.note
+                return alt
     return None
+
+
+def find_service_alternative_note(text: str, client_id: str) -> str | None:
+    alt = find_service_alternative(text, client_id)
+    return alt.note if alt else None
+
+
+def service_alternative_quick_replies(text: str, client_id: str) -> list[dict[str, str]]:
+    alt = find_service_alternative(text, client_id)
+    if alt is None or not alt.suggest_ref:
+        return []
+    label = f"Про {alt.mention}" if alt.mention else "Подробнее"
+    return [{"label": label, "ref": alt.suggest_ref}]
+
+
+def build_service_not_offered_answer(
+    client_id: str,
+    *,
+    question: str = "",
+    requested_service: str | None = None,
+) -> str:
+    alt = find_service_alternative_note(question, client_id)
+    if alt:
+        return alt.strip()
+    bundle = load_clinic_policies(client_id)
+    tmpl = (bundle.service_not_offered_template if bundle else "") or ""
+    svc = (requested_service or "").strip() or "эту услугу"
+    if tmpl:
+        return tmpl.format(requested_service=svc)
+    return (
+        "К сожалению, такую услугу в нашей клинике не оказываем. "
+        "Могу подсказать по направлениям, которые у нас есть, или записать на консультацию."
+    )

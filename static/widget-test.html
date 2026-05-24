@@ -49,12 +49,22 @@
     "clientId": "default",
     "avatarUrl": "/static/avatar.png",
     "botName": "Надежда",
-    "onlineLabel": "ИИ-консультант ЦЭСИ. Онлайн 24/7",
-    "welcomeText": "Здравствуйте!\nЯ ИИ-консультант клиники ЦЭСИ. Задайте вопрос по лечению или выберите тему ниже.",
+    "onlineLabel": "ИИ-консультант клиники. Онлайн 24/7",
+    "launcherSubtitle": "Демо ИИ-консультанта клиники",
+    "launcherCtaLabel": "Запустить демо",
+    "demoLauncher": true,
+    "welcomeText": "Здравствуйте!\nЯ демо-версия ИИ-консультанта стоматологической клиники. Задайте вопрос по лечению или выберите тему ниже.",
+    "videoAspect": "horizontal",
+    "videoCatalog": {
+      "pain-doctor-explains": {
+        "title": "Комментарий врача",
+        "src": "/api/media/pain-doctor-explains?client_id=default"
+      }
+    },
     "starterPrompts": [
-      { "label": "Это больно?", "q": "Больно ли делать имплантацию?" },
-      { "label": "Сколько стоит?", "q": "Сколько стоит имплантация?" },
-      { "label": "Сроки", "q": "Сколько длятся работы по имплантации?" }
+      { "label": "Я боюсь боли", "q": "Я боюсь боли" },
+      { "label": "Расскажите про all-on-4", "q": "Расскажите про all-on-4" },
+      { "label": "Посмотреть видео с врачом", "videoKey": "pain-doctor-explains" }
     ]
   }
   </script>

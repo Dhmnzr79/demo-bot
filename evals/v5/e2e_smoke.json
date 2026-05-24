@@ -190,7 +190,7 @@
       "question": "Как врач ставит имплант?",
       "expected_route": "retrieval_chunk",
       "must_contain": [],
-      "must_not_contain": ["моисеев", "бояршин", "ларин", "хан"],
+      "must_not_contain": ["орлов", "волков", "кузнецов", "фёдоров", "морозов", "григорьев"],
       "comment": "процесс/техника, не doctors_lookup; имена из md не должны попадать в ответ.",
       "coverage_class": "STRONG"
     },
@@ -204,10 +204,10 @@
       "coverage_class": "WEAK"
     },
     {
-      "id": "smoke_doctors_moiseev_profile",
-      "question": "Расскажите про Моисеева",
+      "id": "smoke_doctors_orlov_profile",
+      "question": "Расскажите про Орлова",
       "expected_route": "retrieval_chunk",
-      "must_contain": ["моисе"],
+      "must_contain": ["орлов"],
       "comment": "doctor-only: профиль врача; не отдельного route name doctor в раннере нет.",
       "coverage_class": "WEAK"
     },

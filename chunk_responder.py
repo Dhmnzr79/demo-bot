@@ -354,11 +354,12 @@ def respond_from_chunk_stream(
     route: str = "retrieval_chunk",
     generator_append_text: str | None = None,
 ):
-    """Generator yielding SSE strings: text_delta → ui → done.
+    """Generator yielding SSE strings: typing → text_delta → ui → done.
 
     Используй с Flask: Response(respond_from_chunk_stream(...), mimetype='text/event-stream')
     Полностью зеркалит respond_from_chunk, но стримит токены ответа.
     """
+    yield 'event: typing\ndata: {"phase": "searching"}\n\n'
     if (q or "").strip():
         mem_add_user(sid, q)
     meta = meta_for_chunk(chunk, client_id=client_id)

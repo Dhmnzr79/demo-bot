@@ -16,9 +16,11 @@ from contracts.ingress_route import (
     PolicyKey,
 )
 from core.clinic_policies_loader import (
+    build_service_not_offered_answer,
     load_clinic_policies,
     match_clinic_policy_key,
     policy_answer,
+    service_alternative_quick_replies,
 )
 from core.routing_loader import THRESHOLDS
 from doctors_lookup import doctor_ground_truth_mention
@@ -326,6 +328,7 @@ def build_ingress_payload(
     bundle = load_clinic_policies(client_id)
     phone = (bundle.contact_phone_display if bundle else "") or ""
     phone_suffix = f" по номеру {phone}" if phone else ""
+    quick_replies: list[dict[str, str]] = []
 
     if result.route == "hard_stop_non_target":
         answer = (
@@ -356,17 +359,18 @@ def build_ingress_payload(
             "интерес к записи на консультацию для взрослого пациента."
         )
     elif result.route == "service_not_offered":
-        answer = (
-            "Это демо-бот, и такой информации нет в базе данных. "
-            "Если её добавить, я смогу помочь вашим клиентам с этим вопросом. "
-            "А пока можете спросить про что-нибудь другое."
+        answer = build_service_not_offered_answer(
+            client_id,
+            question=question,
+            requested_service=result.requested_service,
         )
+        quick_replies = service_alternative_quick_replies(question, client_id)
     else:
         answer = ""
 
     return {
         "answer": answer,
-        "quick_replies": [],
+        "quick_replies": quick_replies,
         "cta": None,
         "video": None,
         "situation": {"show": False, "mode": "normal"},
