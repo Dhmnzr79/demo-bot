@@ -291,6 +291,38 @@
       "coverage_class": "WEAK"
     },
     {
+      "id": "smoke_multi_turn_price_veneers_then_implants",
+      "history": [
+        {"question": "Сколько стоят виниры?"}
+      ],
+      "question": "Сколько стоят импланты?",
+      "expected_route": "price_lookup",
+      "must_not_contain": ["винир"],
+      "must_contain": ["цен", "консульт"],
+      "comment": "multi-turn: новая услуга в тексте — не подменять прайсом прошлой услуги из сессии; clarify или верный блок без виниров.",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_multi_turn_implant_then_whitening_typo_price",
+      "history": [
+        {"question": "Сколько стоит классическая имплантация?"}
+      ],
+      "question": "А сколько стоит обеливания?",
+      "expected_route": "price_lookup",
+      "must_not_contain": ["implantium", "76 200", "классическая имплантация"],
+      "must_contain": ["отбелив", "18000"],
+      "comment": "multi-turn: опечатка «обеливания» — trigram к каталогу, не session fallback на импланты.",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_price_typo_whitening_single",
+      "question": "сколько стоит обеливание?",
+      "expected_route": "price_lookup",
+      "must_contain": ["отбелив", "18000"],
+      "comment": "одиночный ход: опечатка обеливание → professional_whitening через trigram, не clarify.",
+      "coverage_class": "STRONG"
+    },
+    {
       "id": "smoke_multi_turn_switch_implant_to_crowns",
       "history": [
         {"question": "Какая гарантия на импланты?"}

@@ -13,6 +13,7 @@ from query_selector import (
     catalog_service_session_context,
     match_service_from_catalog,
     price_rules_hint,
+    price_lookup_allows_session_context,
     select_price_service_route,
 )
 
@@ -184,7 +185,7 @@ def route_source(
 
     if ri == "price_concern":
         ctx = catalog_service_session_context(sid, client_id)
-        if ctx:
+        if ctx and price_lookup_allows_session_context(q0, match, ctx):
             s2 = ctx.get("service") if isinstance(ctx.get("service"), dict) else {}
             cref = str((s2 or {}).get("concern_ref") or "").strip()
             if cref:

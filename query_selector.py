@@ -349,6 +349,40 @@ def _match_score(query: str, phrase: str) -> float:
     return round(max(recall, (recall + precision) / 2.0), 4)
 
 
+def _catalog_typo_stem_overlap(q_token: str, phrase_norm: str, *, min_stem: int = 7) -> float:
+    """Длинный общий фрагмент токена внутри фразы каталога (обеливания → …беливан… в отбеливание)."""
+    qt = _norm(q_token)
+    if len(qt) < min_stem + 1 or not phrase_norm:
+        return 0.0
+    for start in range(len(qt) - min_stem + 1):
+        for length in range(len(qt) - start, min_stem - 1, -1):
+            sub = qt[start : start + length]
+            if len(sub) >= min_stem and sub in phrase_norm:
+                return 0.78
+    return 0.0
+
+
+def _match_score_catalog_typo(query: str, phrase: str) -> float:
+    """Char-trigram и stem-overlap по токенам (общий механизм, не список опечаток)."""
+    q_tokens = [t for t in _core_tokens_catalog(query) if len(t) >= 5]
+    if not q_tokens:
+        return 0.0
+    p_norm = _norm(phrase)
+    p_tokens = [_norm(t) for t in _core_tokens_catalog(phrase) if len(t) >= 4]
+    best = 0.0
+    for qt in q_tokens:
+        qt_n = _norm(qt)
+        for pt in p_tokens:
+            best = max(best, alias_lexical.trigram_alias_boost(qt_n, pt))
+        if p_norm:
+            best = max(best, alias_lexical.trigram_alias_boost(qt_n, p_norm))
+            if len(qt_n) >= 8:
+                trimmed = qt_n[:-1]
+                best = max(best, alias_lexical.trigram_alias_boost(trimmed, p_norm))
+            best = max(best, _catalog_typo_stem_overlap(qt_n, p_norm))
+    return round(float(best), 4)
+
+
 def _lookup_intent_by_rules(q: str) -> str:
     q0 = (q or "").strip()
     if not q0:
@@ -400,7 +434,12 @@ def match_service_from_catalog(q: str, *, client_id: str | None) -> dict:
         phrases.extend(str(x).strip() for x in aliases if str(x).strip())
         local_best = 0.0
         for ph in phrases:
-            local_best = max(local_best, _match_score(q, ph), _match_score_lemma(q, ph))
+            local_best = max(
+                local_best,
+                _match_score(q, ph),
+                _match_score_lemma(q, ph),
+                _match_score_catalog_typo(q, ph),
+            )
         if local_best > best_score:
             best_id = str(service_id)
             best_obj = entry
@@ -494,6 +533,39 @@ def _service_from_session_context(sid: str | None, client_id: str | None) -> dic
     return None
 
 
+def price_session_ctx_matches_catalog_leader(match: dict[str, Any], ctx: dict[str, Any]) -> bool:
+    """Если каталог нашёл лучшего кандидата по service_id — session fallback допустим только при том же id.
+
+    Иначе пользователь явно назвал другую услугу (даже при низком match score), и подставлять
+    last_catalog_service_id нельзя (виниры → импланты).
+    """
+    mid = (match.get("matched_service_id") or "").strip()
+    if not mid:
+        return True
+    return mid == (ctx.get("service_id") or "").strip()
+
+
+def _price_query_names_explicit_service(q: str) -> bool:
+    """В ценовом вопросе есть название услуги, а не только «а сколько стоит»."""
+    if continuation_only_phrase(q):
+        return False
+    qn = re.sub(r"\s+", " ", (q or "").strip(), flags=re.U)
+    stripped = PRICE_LOOKUP_RE.sub("", qn).strip()
+    stripped = re.sub(r"^(?:а|и|ну)\s+", "", stripped, flags=re.I | re.U).strip()
+    stripped = re.sub(r"^[\s?.!,;:—\-]+", "", stripped).strip()
+    tokens = [t for t in re.findall(r"[0-9a-zа-яё]{3,}", stripped, flags=re.I | re.U)]
+    return bool(tokens)
+
+
+def price_lookup_allows_session_context(q: str, match: dict[str, Any], ctx: dict[str, Any]) -> bool:
+    """Session fallback для цены: тот же service_id в каталоге или короткое продолжение без нового объекта."""
+    if not price_session_ctx_matches_catalog_leader(match, ctx):
+        return False
+    if not (match.get("matched_service_id") or "").strip() and _price_query_names_explicit_service(q):
+        return False
+    return True
+
+
 def select_price_service_route(
     q: str, *, client_id: str | None, sid: str | None = None, intent_override: str | None = None
 ) -> dict:
@@ -506,7 +578,7 @@ def select_price_service_route(
     match = match_service_from_catalog(q, client_id=client_id)
     if not match.get("matched_service_id"):
         ctx = _service_from_session_context(sid, client_id)
-        if ctx and intent == "price_lookup":
+        if ctx and intent == "price_lookup" and price_lookup_allows_session_context(q, match, ctx):
             pi = ctx.get("price_item")
             pr = ctx.get("price_ref")
             rs = "catalog"
@@ -555,7 +627,7 @@ def select_price_service_route(
         }
     if not match.get("is_confident"):
         ctx = _service_from_session_context(sid, client_id)
-        if ctx and intent == "price_lookup":
+        if ctx and intent == "price_lookup" and price_lookup_allows_session_context(q, match, ctx):
             pi = ctx.get("price_item")
             pr = ctx.get("price_ref")
             rs = "catalog"
