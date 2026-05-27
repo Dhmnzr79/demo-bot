@@ -55,7 +55,6 @@ from resolver import maybe_start_shadow_resolver, resolve_with_fallback
 from arbiter import decide_content_route
 from content_arbiter import ContentCandidates, collect_content_candidates
 from query_selector import (
-    DEFAULT_PRICE_FALLBACK_REF,
     compute_retrieval_scope_with_conflict_guard,
     select_chunk_for_question,
     select_price_service_route,
@@ -65,6 +64,8 @@ from source_routing import route_source, slim_source_route_payload
 from policy import (
     apply_response_policy,
     contacts_intent,
+    continuation_only_phrase,
+    continuation_without_context,
     pick_contacts_chunk,
 )
 from retriever import (
@@ -83,17 +84,17 @@ from session import (
     mem_get,
     is_active_lead_flow,
     mem_reset,
-    parse_yes,
     record_last_bot_payload,
     set_last_catalog_service,
     set_anti_spam_redirect_shown,
     sid_from_body,
 )
+from dialog_offer import parse_lead_offer_no, parse_lead_offer_yes
 from ux_builder import (
-    _format_price_value,
     build_price_clarify_payload,
     build_price_concern_payload,
     build_price_lookup_payload,
+    format_price_answer_from_item,
     build_service_facts_card_payload,
     empty_question_response,
     internal_error_response,
@@ -179,9 +180,16 @@ TXT = {
     ),
     "situation_back_fallback": "Хорошо, продолжим. Задайте вопрос или выберите тему.",
     "followup_choose_topic": "Могу рассказать про этапы или про сроки — что выбрать?",
+    "lead_offer_declined": "Хорошо. Если появятся вопросы — спрашивайте.",
+    "bare_affirmative_fallback": (
+        "Напишите, пожалуйста, ваш вопрос — так будет проще подсказать."
+    ),
 }
 GUIDED_MENU_ANSWER = (
     "Могу коротко подсказать и помочь выбрать направление — что для вас важнее?"
+)
+CONTINUATION_CLARIFY_ANSWER = (
+    "Могу подсказать по услугам, ценам, врачам или записи. Что вас интересует?"
 )
 
 
@@ -197,6 +205,15 @@ def _guided_quick_replies() -> list[dict]:
 def _guided_menu_payload(sid: str, client_id: str | None) -> dict:
     return _service_payload(
         GUIDED_MENU_ANSWER,
+        sid,
+        client_id,
+        quick_replies=_guided_quick_replies(),
+    )
+
+
+def _continuation_clarify_payload(sid: str, client_id: str | None) -> dict:
+    return _service_payload(
+        CONTINUATION_CLARIFY_ANSWER,
         sid,
         client_id,
         quick_replies=_guided_quick_replies(),
@@ -371,10 +388,9 @@ def _is_short_contextual(q: str, st: dict) -> bool:
         return False
     if PRICE_LOOKUP_RE.search(q) or PRICE_CONCERN_RE.search(q) or CONTACTS_RE.search(q):
         return False
-    # parse_yes уже обработан в handle_flows для known состояний.
-    # Здесь ловим его только если last_bot_action == "none" (нет pending действия).
-    last_action = st.get("last_bot_action") or "none"
-    if parse_yes(q) and last_action == "none":
+    if parse_lead_offer_yes(q) and not bool((st or {}).get("pending_lead_offer")):
+        return True
+    if parse_lead_offer_no(q) and not bool((st or {}).get("pending_lead_offer")):
         return True
     # Короткие нейтральные реплики: "понятно", "спасибо", "хм", "ясно" и т.п.
     _NEUTRAL_RX = re.compile(
@@ -601,18 +617,13 @@ def _orchestrate_price_matched_from_route(
                 price_ref=ref_px,
                 fallback_reason=price_route.get("fallback_reason"),
             )
-            if ref_px == DEFAULT_PRICE_FALLBACK_REF and not price_route.get("price_item"):
-                q0 = (q or "").strip()
-                llmq = (
-                    f"{q0}\n\n"
-                    "Контекст для ответа: точной цены на эту услугу в нашем каталоге "
-                    "сейчас нет. Сначала коротко признай это (например: «Точную "
-                    "стоимость лучше уточнить у администратора»), затем расскажи об "
-                    "условиях оплаты на основе материала ниже. Не выдумывай конкретные "
-                    "цифры. Будь дружелюбным."
-                )
-            else:
-                llmq = q or f"Цена по {ref_px}"
+            q0 = (q or "").strip()
+            llmq = (
+                f"{q0}\n\n"
+                "Ответь по ценам только из материала ниже. "
+                "Без вступлений вроде «такая услуга есть», «стоимость составляет». "
+                "Сразу по сути, цифры только из текста."
+            )
             if str(price_route.get("fallback_reason") or "") == "context_session":
                 svc_ctx = price_route.get("service") if isinstance(price_route.get("service"), dict) else {}
                 ttl = str(svc_ctx.get("title") or price_route.get("matched_service_id") or "").strip()
@@ -682,14 +693,8 @@ def _service_price_line_for_content(service: dict, client_id: str | None) -> str
     price_item = prices.get(price_key) if isinstance(prices, dict) else None
     if not isinstance(price_item, dict):
         return None
-    rendered = _format_price_value(price_item)
-    if not rendered:
-        return None
-    note = str(price_item.get("note") or "").strip()
-    line = f"Стоимость: {rendered}."
-    if note:
-        line += f" Важно: {note}."
-    return line
+    title = str(service.get("title") or price_key).strip()
+    return format_price_answer_from_item(price_item, title_fallback=title)
 
 
 def safe_jsonify(payload):
@@ -1211,8 +1216,35 @@ def _orchestrate_ask_turn(data: dict):
             return AskOrchestrationResult(kind='chunk', q=q, sid=sid, client_id=client_id, chosen_chunk=ch, llm_question=q or f'Информация из {ref}', log_event='Answer generated from ref', chunk_route='retrieval_chunk', decision_frame=_orch_decision_dump(decision))
     if not q:
         return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=empty_question_response(), service_doc_id=None, service_track_user=False, service_route='error', decision_frame=_orch_decision_dump(decision))
+    if continuation_without_context(q, st):
+        log_json(logger, 'continuation_no_context', sid=sid, client_id=client_id)
+        return AskOrchestrationResult(
+            kind='service_reply',
+            q=q,
+            sid=sid,
+            client_id=client_id,
+            service_payload=_continuation_clarify_payload(sid, client_id),
+            service_doc_id=None,
+            service_track_user=True,
+            service_route='continuation_clarify',
+            decision_frame=_orch_decision_dump(decision),
+        )
+    current_doc_id = (st.get('current_doc_id') or '').strip()
+    if current_doc_id and continuation_only_phrase(q):
+        ch = get_chunk_by_ref(f'{current_doc_id}#korotko', client_id=client_id)
+        if ch:
+            return AskOrchestrationResult(
+                kind='chunk',
+                q=q,
+                sid=sid,
+                client_id=client_id,
+                chosen_chunk=ch,
+                llm_question=q,
+                log_event='Answer from continuation topic fallback',
+                chunk_route='retrieval_chunk',
+                decision_frame=_orch_decision_dump(decision),
+            )
     if _is_short_contextual(q, st):
-        current_doc_id = (st.get('current_doc_id') or '').strip()
         if current_doc_id:
             ch = get_chunk_by_ref(f'{current_doc_id}#korotko', client_id=client_id)
             if ch:

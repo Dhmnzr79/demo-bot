@@ -22,6 +22,12 @@ const SEND_BTN_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xm
 
 const LINK_CHEVRON_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+/** Уникальный id градиента — иначе при нескольких кнопках в ленте ломается fill="url(#…)" */
+function videoPlayIconSvg(gradientId) {
+  const gid = String(gradientId || "").replace(/[^a-zA-Z0-9_-]/g, "") || "clinicVideoPlay";
+  return `<svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M13 26C16.4478 26 19.7544 24.6304 22.1924 22.1924C24.6304 19.7544 26 16.4478 26 13C26 9.55219 24.6304 6.24558 22.1924 3.80761C19.7544 1.36964 16.4478 0 13 0C9.55219 0 6.24558 1.36964 3.80761 3.80761C1.36964 6.24558 0 9.55219 0 13C0 16.4478 1.36964 19.7544 3.80761 22.1924C6.24558 24.6304 9.55219 26 13 26ZM12.2769 8.398C12.0321 8.23472 11.7477 8.14094 11.4538 8.12667C11.16 8.1124 10.8678 8.17816 10.6084 8.31695C10.349 8.45575 10.1321 8.66235 9.98095 8.91474C9.82978 9.16712 9.74996 9.45581 9.75 9.75V16.25C9.74996 16.5442 9.82978 16.8329 9.98095 17.0853C10.1321 17.3376 10.349 17.5443 10.6084 17.683C10.8678 17.8218 11.16 17.8876 11.4538 17.8733C11.7477 17.8591 12.0321 17.7653 12.2769 17.602L17.1519 14.352C17.3744 14.2036 17.5569 14.0026 17.6831 13.7667C17.8093 13.5309 17.8754 13.2675 17.8754 13C17.8754 12.7325 17.8093 12.4691 17.6831 12.2333C17.5569 11.9974 17.3744 11.7964 17.1519 11.648L12.2769 8.398Z" fill="url(#${gid})"/><defs><linearGradient id="${gid}" x1="-0.443182" y1="9.55303" x2="24.8274" y2="15.429" gradientUnits="userSpaceOnUse"><stop stop-color="#662482"/><stop offset="1" stop-color="#F351DD"/></linearGradient></defs></svg>`;
+}
+
 const CTA_CHAT_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg>`;
 
 const CTA_CALENDAR_SVG = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.75"/><path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>`;
@@ -655,8 +661,16 @@ export function mountWidget(root, config) {
 
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "clinic-msg__video-reveal";
-    btn.innerHTML = `<span class="clinic-msg__video-reveal-label">${VIDEO_REVEAL_LABEL}</span><span class="clinic-msg__video-reveal-play" aria-hidden="true">▶</span>`;
+    btn.className = "clinic-msg__link clinic-msg__video-reveal";
+    const lab = document.createElement("span");
+    lab.className = "clinic-msg__link-text";
+    lab.textContent = VIDEO_REVEAL_LABEL;
+    const play = document.createElement("span");
+    play.className = "clinic-msg__video-play";
+    play.setAttribute("aria-hidden", "true");
+    play.innerHTML = videoPlayIconSvg(`clinicVp_${msgIndex}`);
+    btn.appendChild(lab);
+    btn.appendChild(play);
     btn.setAttribute("aria-label", VIDEO_REVEAL_LABEL);
     btn.addEventListener("click", () => {
       const target = state.messages[msgIndex];

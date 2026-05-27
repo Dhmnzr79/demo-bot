@@ -752,46 +752,35 @@
 }
 
 .clinic-msg__video-reveal {
+  margin-top: 18px;
+  border-top: 1px solid var(--clinic-line);
+}
+
+.clinic-msg__video-reveal + .clinic-msg__links {
+  margin-top: 0;
+  border-top: none;
+}
+
+.clinic-msg__video-reveal:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.clinic-msg__video-play {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  margin-top: 14px;
-  min-height: 48px;
-  padding: 12px 16px;
-  border-radius: var(--clinic-radius-md);
-  border: 1px solid var(--clinic-chip-border);
-  background: var(--clinic-chip-bg);
-  color: var(--clinic-text);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.3;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  justify-content: center;
+  border-radius: 0;
+  background: transparent;
 }
 
-.clinic-msg__video-reveal:hover {
-  border-color: var(--clinic-border-accent);
-  color: var(--clinic-primary);
-}
-
-.clinic-msg__video-reveal:focus-visible {
-  outline: none;
-  box-shadow: var(--clinic-focus);
-}
-
-.clinic-msg__video-reveal-label {
-  flex: 1;
-  min-width: 0;
-}
-
-.clinic-msg__video-reveal-play {
-  flex-shrink: 0;
-  font-size: 18px;
-  opacity: 0.85;
+.clinic-msg__video-play svg {
+  display: block;
+  width: 26px;
+  height: 26px;
 }
 
 .clinic-msg__video {

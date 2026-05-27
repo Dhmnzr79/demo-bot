@@ -15,12 +15,14 @@ from session import (
     mem_get,
     parse_no,
     parse_yes,
+    clear_pending_lead_offer,
     set_lead_intent,
     set_lead_pending_name,
     set_situation_note,
     set_situation_pending,
     update_profile,
 )
+from dialog_offer import parse_lead_offer_no, parse_lead_offer_yes
 
 _LEAD_NAME_CONFIRM_YES = "lead:name_confirm:yes"
 _LEAD_NAME_CONFIRM_NO = "lead:name_confirm:no"
@@ -279,10 +281,7 @@ def handle_flows(
     get_last_content_ui_payload,
     get_topic_state,
 ) -> dict | None:
-    """Return {'payload': dict, 'doc_id': str|None} when flow handled.
-
-    May also return {'redirect_ref': str} for followup redirect.
-    """
+    """Return {'payload': dict, 'doc_id': str|None} when flow handled."""
     if data.get("situation_action") == "back":
         set_situation_pending(sid, False)
         snap = get_last_content_ui_payload(sid)
@@ -344,6 +343,7 @@ def handle_flows(
         )
 
     if q and booking_intent(q, sid=sid, client_id=client_id) and not is_active_lead_flow(st):
+        clear_pending_lead_offer(sid)
         mark_booking_intent_ever(sid)
         set_lead_intent(sid, "collecting_name")
         return {
@@ -358,31 +358,56 @@ def handle_flows(
             "doc_id": None,
         }
 
-    if (
-        st.get("last_bot_action") == "offered_subtopic"
-        and q
-        and len(q.strip().split()) <= 3
-        and parse_yes(q)
-        and st.get("lead_intent") != "confirming_name"
-    ):
-        buttons = [b for b in (st.get("last_presented_buttons") or []) if b.get("ref")]
-        if len(buttons) == 1:
-            return {"payload": None, "doc_id": None, "redirect_ref": buttons[0]["ref"]}
-        if len(buttons) >= 2:
-            quick_replies = [
-                {"label": (b.get("label") or "").strip(), "ref": b.get("ref")}
-                for b in buttons[:2]
-                if (b.get("label") or "").strip() and b.get("ref")
-            ]
+    pending_lead = bool(st.get("pending_lead_offer"))
+    if pending_lead and q:
+        if parse_lead_offer_yes(q):
+            clear_pending_lead_offer(sid)
+            mark_booking_intent_ever(sid)
+            set_lead_intent(sid, "collecting_name")
             return {
                 "payload": service_payload(
-                    txt["followup_choose_topic"],
+                    txt["lead_name_prompt"],
                     sid,
                     client_id,
-                    quick_replies=quick_replies,
+                    lead_flow=True,
+                    lead_step="name",
                 ),
-                "doc_id": st.get("current_doc_id"),
+                "doc_id": None,
             }
+        if parse_lead_offer_no(q):
+            clear_pending_lead_offer(sid)
+            return {
+                "payload": service_payload(
+                    txt.get(
+                        "lead_offer_declined",
+                        "Хорошо. Если появятся вопросы — спрашивайте.",
+                    ),
+                    sid,
+                    client_id,
+                ),
+                "doc_id": None,
+            }
+        clear_pending_lead_offer(sid)
+        st = mem_get(sid)
+
+    if (
+        q
+        and parse_lead_offer_yes(q)
+        and not pending_lead
+        and not is_active_lead_flow(st)
+        and st.get("lead_intent") != "confirming_name"
+    ):
+        return {
+            "payload": service_payload(
+                txt.get(
+                    "bare_affirmative_fallback",
+                    "Напишите, пожалуйста, ваш вопрос — так будет проще подсказать.",
+                ),
+                sid,
+                client_id,
+            ),
+            "doc_id": None,
+        }
 
     if is_active_lead_flow(st):
         payload = _lead_flow_payload(
@@ -444,33 +469,6 @@ def handle_flows(
                 client_id,
                 situation_mode="pending",
                 situation_collect=True,
-            ),
-            "doc_id": None,
-        }
-
-    if st.get("last_bot_action") == "offered_situation" and parse_yes(q):
-        set_situation_pending(sid, True)
-        return {
-            "payload": service_payload(
-                txt["situation_prompt"],
-                sid,
-                client_id,
-                situation_mode="pending",
-                situation_collect=True,
-            ),
-            "doc_id": None,
-        }
-
-    if st.get("last_bot_action") == "offered_cta" and parse_yes(q):
-        mark_booking_intent_ever(sid)
-        set_lead_intent(sid, "collecting_name")
-        return {
-            "payload": service_payload(
-                txt["lead_name_prompt"],
-                sid,
-                client_id,
-                lead_flow=True,
-                lead_step="name",
             ),
             "doc_id": None,
         }

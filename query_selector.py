@@ -16,7 +16,14 @@ import alias_lexical
 from core.routing_loader import THRESHOLDS
 from llm import classify_price_intent, rewrite_query_for_retrieval
 from session import mem_get
-from policy import contacts_intent, pick_contacts_chunk, pick_prices_chunk, price_intent
+from policy import (
+    contacts_intent,
+    continuation_only_phrase,
+    pick_contacts_chunk,
+    pick_prices_chunk,
+    price_intent,
+    session_has_continuation_context,
+)
 from retriever import (
     broad_query_detect,
     chunk_info,
@@ -29,25 +36,25 @@ from retriever import (
     retrieve,
 )
 
-# PR #1.2.7: нет строки в prices.json и нет service price_ref → генерация из общего чанка условий оплаты.
-DEFAULT_PRICE_FALLBACK_REF = "clinic__info__payment_terms.md#korotko"
-
-
-def _apply_default_price_lookup_ref(
+def _resolve_price_lookup_route(
     *,
     route_source: str,
     price_ref: Any,
     price_item: dict | None,
+    q: str = "",
+    sid: str | None = None,
+    client_id: str | None = None,
 ) -> tuple[str, str | None, str | None]:
-    """Для price_lookup: без price_item и без price_ref подставить общий MD; иначе без изменений."""
-    if price_item is not None:
-        pr = str(price_ref).strip() if price_ref else ""
-        return route_source, pr or None, None
-    pref = str(price_ref).strip() if price_ref else ""
+    """price_ref → md; иначе prices.json; без авто-подстановки payment_terms."""
+    if continuation_only_phrase(q) and not _service_from_session_context(sid, client_id):
+        return route_source, None, None
+    pref = str(price_ref or "").strip()
     if pref:
         rs = "price_ref" if route_source == "catalog" else route_source
         return rs, pref, None
-    return "price_ref", DEFAULT_PRICE_FALLBACK_REF, "default_payment_terms"
+    if price_item is not None:
+        return "prices_json", None, None
+    return route_source, None, "price_not_in_catalog"
 
 
 def select_chunk_for_question(
@@ -346,6 +353,8 @@ def _lookup_intent_by_rules(q: str) -> str:
     q0 = (q or "").strip()
     if not q0:
         return "other"
+    if continuation_only_phrase(q0):
+        return "other"
     if PRICE_CONCERN_RE.search(q0):
         return "price_concern"
     if PRICE_LOOKUP_RE.search(q0):
@@ -500,22 +509,43 @@ def select_price_service_route(
         if ctx and intent == "price_lookup":
             pi = ctx.get("price_item")
             pr = ctx.get("price_ref")
-            rs = "prices_json" if pi is not None else ("price_ref" if (pr or "").strip() else "catalog")
-            rs, pr2, fb = _apply_default_price_lookup_ref(route_source=rs, price_ref=pr, price_item=pi)
+            rs = "catalog"
+            rs, pr2, fb = _resolve_price_lookup_route(
+                route_source=rs, price_ref=pr, price_item=pi, q=q, sid=sid, client_id=client_id
+            )
             fb_final = fb or "context_session"
+            if rs == "prices_json" or (pr2 and rs == "price_ref"):
+                return {
+                    "mode": "matched",
+                    "intent": intent,
+                    "route_source": rs,
+                    "matched_service_id": ctx["service_id"],
+                    "service": ctx["service"],
+                    "match_score": 1.0,
+                    "is_confident": True,
+                    "price_key": ctx.get("price_key"),
+                    "price_ref": pr2,
+                    "price_item": pi,
+                    "context_doc_id": ctx.get("context_doc_id"),
+                    "fallback_reason": fb_final,
+                }
             return {
-                "mode": "matched",
+                "mode": "clarify",
                 "intent": intent,
-                "route_source": rs,
-                "matched_service_id": ctx["service_id"],
-                "service": ctx["service"],
+                "fallback_reason": fb_final or "price_not_in_catalog",
+                "matched_service_id": ctx.get("service_id"),
+                "service": ctx.get("service"),
                 "match_score": 1.0,
                 "is_confident": True,
-                "price_key": ctx.get("price_key"),
-                "price_ref": pr2,
-                "price_item": pi,
-                "context_doc_id": ctx.get("context_doc_id"),
-                "fallback_reason": fb_final,
+            }
+        if continuation_only_phrase(q) and not session_has_continuation_context(
+            mem_get(sid) if sid else {}
+        ):
+            return {
+                "mode": "clarify",
+                "intent": intent,
+                "fallback_reason": "continuation_no_context",
+                **match,
             }
         return {
             "mode": "clarify",
@@ -528,22 +558,43 @@ def select_price_service_route(
         if ctx and intent == "price_lookup":
             pi = ctx.get("price_item")
             pr = ctx.get("price_ref")
-            rs = "prices_json" if pi is not None else ("price_ref" if (pr or "").strip() else "catalog")
-            rs, pr2, fb = _apply_default_price_lookup_ref(route_source=rs, price_ref=pr, price_item=pi)
+            rs = "catalog"
+            rs, pr2, fb = _resolve_price_lookup_route(
+                route_source=rs, price_ref=pr, price_item=pi, q=q, sid=sid, client_id=client_id
+            )
             fb_final = fb or "context_session"
+            if rs == "prices_json" or (pr2 and rs == "price_ref"):
+                return {
+                    "mode": "matched",
+                    "intent": intent,
+                    "route_source": rs,
+                    "matched_service_id": ctx["service_id"],
+                    "service": ctx["service"],
+                    "match_score": 1.0,
+                    "is_confident": True,
+                    "price_key": ctx.get("price_key"),
+                    "price_ref": pr2,
+                    "price_item": pi,
+                    "context_doc_id": ctx.get("context_doc_id"),
+                    "fallback_reason": fb_final,
+                }
             return {
-                "mode": "matched",
+                "mode": "clarify",
                 "intent": intent,
-                "route_source": rs,
-                "matched_service_id": ctx["service_id"],
-                "service": ctx["service"],
+                "fallback_reason": fb_final or "price_not_in_catalog",
+                "matched_service_id": ctx.get("service_id"),
+                "service": ctx.get("service"),
                 "match_score": 1.0,
                 "is_confident": True,
-                "price_key": ctx.get("price_key"),
-                "price_ref": pr2,
-                "price_item": pi,
-                "context_doc_id": ctx.get("context_doc_id"),
-                "fallback_reason": fb_final,
+            }
+        if continuation_only_phrase(q) and not session_has_continuation_context(
+            mem_get(sid) if sid else {}
+        ):
+            return {
+                "mode": "clarify",
+                "intent": intent,
+                "fallback_reason": "continuation_no_context",
+                **match,
             }
         return {
             "mode": "clarify",
@@ -559,17 +610,30 @@ def select_price_service_route(
     route_source = "catalog"
     if intent == "price_concern":
         route_source = "catalog"
-    elif price_ref:
-        route_source = "price_ref"
-    elif price_item is not None:
-        route_source = "prices_json"
     fallback_reason: str | None = None
     if intent == "price_lookup":
-        route_source, price_ref, fallback_reason = _apply_default_price_lookup_ref(
+        route_source, price_ref, fallback_reason = _resolve_price_lookup_route(
             route_source=route_source,
             price_ref=price_ref,
             price_item=price_item if isinstance(price_item, dict) else None,
+            q=q,
+            sid=sid,
+            client_id=client_id,
         )
+        if continuation_only_phrase(q) and not price_ref and price_item is None:
+            return {
+                "mode": "clarify",
+                "intent": intent,
+                "fallback_reason": "continuation_no_context",
+                **match,
+            }
+        if fallback_reason == "price_not_in_catalog":
+            return {
+                "mode": "clarify",
+                "intent": intent,
+                "fallback_reason": fallback_reason,
+                **match,
+            }
     return {
         "mode": "matched",
         "intent": intent,

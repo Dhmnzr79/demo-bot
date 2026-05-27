@@ -331,6 +331,32 @@ def _format_price_value(price: dict) -> str | None:
     return None
 
 
+def _capitalize_note_sentence(note: str) -> str:
+    s = (note or "").strip()
+    if not s:
+        return ""
+    return s[0].upper() + s[1:] if len(s) > 1 else s.upper()
+
+
+def format_price_answer_from_item(
+    price_item: dict,
+    *,
+    title_fallback: str = "",
+) -> str | None:
+    """Короткий ответ по строке prices.json: «Название — цена.» + note вторым предложением."""
+    if not isinstance(price_item, dict):
+        return None
+    name = str(price_item.get("name") or title_fallback).strip() or str(title_fallback).strip()
+    rendered = _format_price_value(price_item)
+    if not rendered or not name:
+        return None
+    answer = f"{name} — {rendered}."
+    note = price_item.get("note")
+    if isinstance(note, str) and note.strip():
+        answer += f" {_capitalize_note_sentence(note)}"
+    return answer
+
+
 def build_service_facts_card_payload(
     *,
     sid: str,
@@ -388,16 +414,17 @@ def build_price_lookup_payload(
     price_item: dict | None,
 ) -> dict:
     title = str((service or {}).get("title") or service_id).strip()
-    rendered = _format_price_value(price_item or {})
-    note = (price_item or {}).get("note")
-    if rendered:
-        answer = f"Да, такая услуга у нас есть. {title}: {rendered}."
-        if isinstance(note, str) and note.strip():
-            answer += f" Важно: {note.strip()}."
+    price_line = (
+        format_price_answer_from_item(price_item, title_fallback=title)
+        if isinstance(price_item, dict)
+        else None
+    )
+    if price_line:
+        answer = price_line
     else:
-        # Защита: при нормальном price_lookup без цифры pipeline уходит в price_ref (PR #1.2.7).
         answer = (
-            "Уточняйте стоимость у администратора — мы свяжемся с вами на бесплатной консультации."
+            "Точную стоимость лучше уточнить на консультации — "
+            "после осмотра назовут сумму по вашей ситуации."
         )
     quick = _suggest_refs_at_most_one(service)
     return {
@@ -416,7 +443,7 @@ def build_price_lookup_payload(
             "route_source": route_source,
             "price_key": price_key,
             "price_ref": price_ref,
-            "fallback_reason": None if rendered else "price_not_found",
+            "fallback_reason": None if price_line else "price_not_found",
             "followups": [],
         },
     }

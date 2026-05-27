@@ -1,11 +1,15 @@
 """Детерминированные правила до/после LLM; намерение записи — regex + при необходимости LLM."""
+from __future__ import annotations
+
 import os
+import re
 
 from config import BOOKING_INTENT_LLM_ON, BOOKING_INTENT_RE, CONTACTS_RE, PRICES_RE
 from core.video_catalog_loader import resolve_video_payload
 from llm import classify_booking_wants_appointment
 from retriever import chunk_doc_type
 from session import is_active_lead_flow
+from dialog_offer import sanitize_ungrounded_continuation_invites
 
 
 def contacts_intent(q: str) -> bool:
@@ -14,6 +18,38 @@ def contacts_intent(q: str) -> bool:
 
 def price_intent(q: str) -> bool:
     return bool(PRICES_RE.search(q or ""))
+
+
+_CONTINUATION_ONLY_RE = re.compile(
+    r"^(?:подробнее|подробней|еще|ещё|а\s+еще|а\s+ещё|дальше)\s*[.!?…]*$",
+    re.I | re.U,
+)
+
+
+def continuation_only_phrase(q: str) -> bool:
+    """Короткая реплика «продолжи тему» без самостоятельного вопроса."""
+    return bool(_CONTINUATION_ONLY_RE.match((q or "").strip()))
+
+
+def session_has_continuation_context(st: dict | None) -> bool:
+    """Есть тема/кнопки/предыдущий ответ бота — можно продолжать диалог."""
+    s = st or {}
+    if (s.get("current_doc_id") or "").strip():
+        return True
+    if (s.get("last_catalog_service_id") or "").strip():
+        return True
+    if (s.get("last_bot_action") or "none") != "none":
+        return True
+    if s.get("last_presented_buttons"):
+        return True
+    if s.get("last_content_ui_payload"):
+        return True
+    hist = s.get("hist") or []
+    return bool(hist)
+
+
+def continuation_without_context(q: str, st: dict | None) -> bool:
+    return continuation_only_phrase(q) and not session_has_continuation_context(st)
 
 
 def booking_intent(
@@ -264,6 +300,12 @@ def apply_response_policy(
     meta = payload.setdefault("meta", {})
     meta["followups"] = decision["followups"]
     meta["topic_exhausted"] = bool(decision["topic_exhausted"])
+    followups_out = list(meta.get("followups") or [])
+    answer_raw = str(payload.get("answer") or "")
+    payload["answer"] = sanitize_ungrounded_continuation_invites(
+        answer_raw,
+        has_structural_followups=bool(followups_out),
+    )
     meta["policy_decision"] = {
         "show_video": bool(decision["show_video"]) and payload["video"] is not None,
         "show_situation": bool(decision["show_situation"]),

@@ -69,6 +69,7 @@ def _fresh_defaults() -> dict:
         "topic_state": {},
         "last_content_ui_payload": None,
         "last_catalog_service_id": None,
+        "pending_lead_offer": False,
         "user_turn_timestamps": [],
     }
 
@@ -196,8 +197,21 @@ def update_topic_empathy(session_id: str, doc_key: str, empathy_used: bool) -> N
         _persist_unlocked(session_id, st)
 
 
+def set_pending_lead_offer(session_id: str, active: bool = True) -> None:
+    with _lock:
+        st = mem_get(session_id)
+        st["pending_lead_offer"] = bool(active)
+        _persist_unlocked(session_id, st)
+
+
+def clear_pending_lead_offer(session_id: str) -> None:
+    set_pending_lead_offer(session_id, False)
+
+
 def record_last_bot_payload(session_id: str, payload: dict) -> None:
-    """После policy: фиксируем last_bot_action и кнопки для трактовки «да» и т.д."""
+    """После policy: фиксируем UI-состояние и pending_lead_offer для strict «да»."""
+    from dialog_offer import detect_explicit_lead_offer_in_answer
+
     with _lock:
         st = mem_get(session_id)
         meta = payload.get("meta") or {}
@@ -231,6 +245,15 @@ def record_last_bot_payload(session_id: str, payload: dict) -> None:
         else:
             st["last_bot_action"] = "none"
             st["last_offer_type"] = None
+
+        answer_text = str(payload.get("answer") or "")
+        lead_flow = bool(meta.get("lead_flow")) or bool(meta.get("situation_collect"))
+        st["pending_lead_offer"] = bool(
+            not lead_flow
+            and not meta.get("low_score")
+            and not meta.get("error")
+            and detect_explicit_lead_offer_in_answer(answer_text)
+        )
 
         if (
             not st.get("situation_pending")
