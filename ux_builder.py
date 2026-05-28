@@ -367,14 +367,22 @@ def build_service_facts_card_payload(
     user_question: str = "",
 ) -> dict:
     """Короткий ответ только из facts каталога (md_entry_ref = null)."""
+    from core.consult_nudge import plan_consult_nudge, record_consult_nudge_after_answer
+
     title = str((service or {}).get("title") or service_id).strip()
     facts = [
         str(x).strip()
         for x in ((service or {}).get("facts") or [])
         if str(x).strip()
     ]
+    planned_nudge = plan_consult_nudge(sid, "catalog_facts", topic_exhausted=False)
     llm_answer = generate_facts_card_answer(
-        title, facts, sid=sid, client_id=client_id, user_question=user_question
+        title,
+        facts,
+        sid=sid,
+        client_id=client_id,
+        user_question=user_question,
+        consult_nudge=planned_nudge,
     )
     if llm_answer:
         answer = llm_answer
@@ -382,6 +390,19 @@ def build_service_facts_card_payload(
         lines = "\n".join(f"• {t}" for t in facts)
         answer = f"{title}\n\n{lines}" if lines else title
     quick = _suggest_refs_at_most_one(service)
+    consult_meta = record_consult_nudge_after_answer(
+        sid, "catalog_facts", planned_nudge, answer
+    )
+    meta_out = {
+        "sid": sid,
+        "client_id": client_id,
+        "intent": "catalog_facts",
+        "matched_service_id": service_id,
+        "match_score": round(float(match_score or 0.0), 4),
+        "route_source": "catalog",
+        "followups": [],
+    }
+    meta_out.update(consult_meta)
     return {
         "answer": answer,
         "quick_replies": quick,
@@ -389,15 +410,7 @@ def build_service_facts_card_payload(
         "video": None,
         "situation": {"show": False, "mode": "normal"},
         "offer": None,
-        "meta": {
-            "sid": sid,
-            "client_id": client_id,
-            "intent": "catalog_facts",
-            "matched_service_id": service_id,
-            "match_score": round(float(match_score or 0.0), 4),
-            "route_source": "catalog",
-            "followups": [],
-        },
+        "meta": meta_out,
     }
 
 

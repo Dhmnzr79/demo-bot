@@ -1,10 +1,19 @@
 """Orchestration: chunk → LLM answer → policy → session side-effects → HTTP payload."""
+
 from __future__ import annotations
 
 import inspect
 import json as _json
 import os
 from typing import Any, Callable
+
+from core.consult_nudge import (
+    plan_consult_nudge,
+    record_consult_nudge_after_answer,
+    topic_exhausted_after_this_chunk,
+)
+from core.md_clean import strip_alias_comments
+from core.stream_answer_text import AnswerFormatContext, StreamTextAccumulator, format_answer_for_display
 
 import session as session_mod
 from llm import LLM_FALLBACK_ANSWER, generate_answer_stream, generate_answer_with_empathy
@@ -31,6 +40,27 @@ from session import (
 from ux_builder import build_ask_response, normalize_policy_payload
 
 _APPLY_POLICY_PARAMS = inspect.signature(apply_response_policy).parameters
+
+
+def _planned_consult_nudge_for_chunk(
+    *,
+    sid: str,
+    route: str,
+    meta: dict,
+    chunk: dict,
+    topic_state: dict,
+) -> str | None:
+    if is_active_lead_flow(mem_get(sid)):
+        return None
+    exhausted = topic_exhausted_after_this_chunk(
+        meta,
+        topic_state,
+        chunk_h3_id=chunk.get("h3_id"),
+    )
+    kind = plan_consult_nudge(sid, route, topic_exhausted=exhausted)
+    if kind:
+        meta["consult_nudge"] = kind
+    return kind
 
 
 def _mark_suggest_ref_used_compat(sid: str, doc_id: str, used: bool = True) -> None:
@@ -97,7 +127,7 @@ def chunk_context_md_for_llm(chunk: dict) -> str:
     parts: list[str] = []
     h2 = (chunk.get("h2") or "").strip()
     h3 = (chunk.get("h3") or "").strip()
-    body = (chunk.get("text") or "").strip()
+    body = strip_alias_comments((chunk.get("text") or "").strip())
     if h2:
         parts.append(h2)
     if h3:
@@ -166,10 +196,40 @@ def verifier_effective_source_body(*, chunk_md_body: str, generator_append_text:
 def ensure_answer(answer: str, chunk: dict) -> str:
     if isinstance(answer, str) and answer.strip():
         return answer
-    fallback = chunk_context_md_for_llm(chunk).strip() or (chunk.get("text") or "").strip()
-    return (fallback[:800] + ("…" if len(fallback) > 800 else "")) or (
-        "Пока не нашёл точный ответ. Можете уточнить вопрос?"
+    return (
+        "Сейчас не получилось сформулировать ответ. "
+        "Попробуйте переформулировать вопрос или выберите тему ниже."
     )
+
+
+def _answer_format_context(
+    *,
+    user_question: str,
+    chunk: dict,
+    meta: dict | None = None,
+) -> AnswerFormatContext:
+    m = meta if isinstance(meta, dict) else {}
+    doc_id = str(m.get("doc_id") or "").strip()
+    if not doc_id:
+        doc_id = os.path.splitext(os.path.basename(str(chunk.get("file") or "")))[0]
+    return AnswerFormatContext(
+        user_question=user_question,
+        h2=str(chunk.get("h2") or "") or None,
+        h3=str(chunk.get("h3") or "") or None,
+        doc_id=doc_id or None,
+    )
+
+
+def format_generator_answer(
+    answer: str,
+    *,
+    user_question: str,
+    chunk: dict,
+    meta: dict | None = None,
+) -> str:
+    """Пост-оформление ответа Generator (вводная перед списком в начале)."""
+    ctx = _answer_format_context(user_question=user_question, chunk=chunk, meta=meta)
+    return format_answer_for_display(answer, ctx)
 
 
 def meta_for_chunk(chunk: dict, client_id: str | None = None) -> dict:
@@ -217,10 +277,22 @@ def respond_from_chunk(
         "h3_id": chunk.get("h3_id"),
     }
 
+    tstate_pre = get_topic_state(sid, doc_id) if doc_id else {}
+    planned_nudge = _planned_consult_nudge_for_chunk(
+        sid=sid,
+        route=route,
+        meta=meta,
+        chunk=chunk,
+        topic_state=tstate_pre,
+    )
+
     answer, profile = generate_answer_with_empathy(
         llm_question or q, sources, meta, sid
     )
     answer = ensure_answer(answer, chunk)
+    answer = format_generator_answer(
+        answer, user_question=llm_question or q, chunk=chunk, meta=meta
+    )
     answer = _append_generator_append_text(answer, generator_append_text)
 
     st = mem_get(sid)
@@ -240,6 +312,10 @@ def respond_from_chunk(
         mark_h3_covered(sid, doc_id, h3_id)
         tstate = get_topic_state(sid, doc_id)
 
+    consult_meta = record_consult_nudge_after_answer(
+        sid, route, planned_nudge, answer
+    )
+
     payload = build_ask_response(
         answer=answer,
         top=chunk,
@@ -253,6 +329,8 @@ def respond_from_chunk(
         payload.setdefault("meta", {})["orch_route"] = route
     if route == "price_concern":
         payload.setdefault("meta", {})["intent"] = "price_concern"
+    if consult_meta:
+        payload.setdefault("meta", {}).update(consult_meta)
     payload = _apply_response_policy_compat(
         payload,
         st,
@@ -296,7 +374,7 @@ def respond_from_chunk(
         generator_append_text=generator_append_text,
     )
     v_trace = build_turn_trace_prefix(
-        answer=answer,
+        answer=str(payload.get("answer") or answer),
         source_ref=str(generator_input.get("source_ref") or ""),
         source_text=verifier_src,
     )
@@ -308,8 +386,9 @@ def respond_from_chunk(
             request.ctx["verifier_turn"] = v_trace
     except Exception:
         pass
+    final_answer = str(payload.get("answer") or answer)
     schedule_verifier_shadow_if_needed(
-        answer=answer,
+        answer=final_answer,
         source_text=verifier_src,
         source_ref=str(generator_input.get("source_ref") or ""),
         sid=sid,
@@ -324,7 +403,7 @@ def respond_from_chunk(
         log_event,
         file=chunk.get("file"),
         score=round(float(chunk.get("_score", 0.0)), 3),
-        answer_length=len(answer),
+        answer_length=len(final_answer),
         generator_input=generator_input,
         verifier_triggered=v_trace.get("verifier_triggered"),
         verifier_trigger_reason=v_trace.get("verifier_trigger_reason"),
@@ -336,8 +415,9 @@ def respond_from_chunk(
         else None
     )
     out = finalize_ask(payload, sid, q, doc_id=doc_id, turn_meta=turn_meta, route=route)
-    if answer.strip():
-        mem_add_bot(sid, answer)
+    bot_text = str(out.get("answer") or answer).strip()
+    if bot_text:
+        mem_add_bot(sid, bot_text)
     return safe_jsonify(out)
 
 
@@ -380,8 +460,28 @@ def respond_from_chunk_stream(
         "h3_id": chunk.get("h3_id"),
     }
 
+    tstate_pre = get_topic_state(sid, doc_id) if doc_id else {}
+    planned_nudge = _planned_consult_nudge_for_chunk(
+        sid=sid,
+        route=route,
+        meta=meta,
+        chunk=chunk,
+        topic_state=tstate_pre,
+    )
+
+    fmt_ctx = _answer_format_context(
+        user_question=llm_question or q, chunk=chunk, meta=meta
+    )
+    stream_acc = StreamTextAccumulator(ctx=fmt_ctx)
     full_text = ""
     profile: dict = {}
+    writing_phase_sent = False
+
+    def _yield_delta(display_delta: str) -> str:
+        return (
+            f"event: text_delta\ndata: "
+            f"{_json.dumps({'delta': display_delta}, ensure_ascii=False)}\n\n"
+        )
 
     try:
         for event_type, value in generate_answer_stream(
@@ -389,7 +489,12 @@ def respond_from_chunk_stream(
         ):
             if event_type == "delta":
                 full_text += value
-                yield f"event: text_delta\ndata: {_json.dumps({'delta': value}, ensure_ascii=False)}\n\n"
+                if not writing_phase_sent:
+                    writing_phase_sent = True
+                    yield 'event: typing\ndata: {"phase": "writing"}\n\n'
+                out = stream_acc.ingest_llm_delta(value)
+                if out:
+                    yield _yield_delta(out)
             elif event_type == "done":
                 full_text, profile = value
     except Exception as e:
@@ -397,12 +502,21 @@ def respond_from_chunk_stream(
         if not full_text.strip():
             full_text = LLM_FALLBACK_ANSWER
 
-    answer = ensure_answer(full_text, chunk)
-    base_ans = answer
-    answer = _append_generator_append_text(answer, generator_append_text)
-    extra = answer[len(base_ans) :] if len(answer) > len(base_ans) else ""
-    if extra:
-        yield f"event: text_delta\ndata: {_json.dumps({'delta': extra}, ensure_ascii=False)}\n\n"
+    raw_final = ensure_answer(full_text, chunk)
+    if not writing_phase_sent and (raw_final or "").strip():
+        writing_phase_sent = True
+        yield 'event: typing\ndata: {"phase": "writing"}\n\n'
+
+    tail = stream_acc.finalize(raw_final)
+    if tail:
+        yield _yield_delta(tail)
+
+    answer_base = format_answer_for_display(raw_final, fmt_ctx)
+    answer = _append_generator_append_text(answer_base, generator_append_text)
+    append_delta = answer[stream_acc.display_sent_len :]
+    if append_delta:
+        yield _yield_delta(append_delta)
+        stream_acc.display_sent_len = len(answer)
 
     # Все session side-effects — идентично respond_from_chunk
     st = mem_get(sid)
@@ -422,6 +536,10 @@ def respond_from_chunk_stream(
         mark_h3_covered(sid, doc_id, h3_id)
         tstate = get_topic_state(sid, doc_id)
 
+    consult_meta = record_consult_nudge_after_answer(
+        sid, route, planned_nudge, answer
+    )
+
     payload = build_ask_response(
         answer=answer,
         top=chunk,
@@ -435,6 +553,8 @@ def respond_from_chunk_stream(
         payload.setdefault("meta", {})["orch_route"] = route
     if route == "price_concern":
         payload.setdefault("meta", {})["intent"] = "price_concern"
+    if consult_meta:
+        payload.setdefault("meta", {}).update(consult_meta)
     payload = _apply_response_policy_compat(
         payload,
         st,
@@ -477,7 +597,7 @@ def respond_from_chunk_stream(
         generator_append_text=generator_append_text,
     )
     v_trace = build_turn_trace_prefix(
-        answer=answer,
+        answer=str(payload.get("answer") or answer),
         source_ref=str(generator_input.get("source_ref") or ""),
         source_text=verifier_src,
     )
@@ -489,8 +609,9 @@ def respond_from_chunk_stream(
             request.ctx["verifier_turn"] = v_trace
     except Exception:
         pass
+    final_answer = str(payload.get("answer") or answer)
     schedule_verifier_shadow_if_needed(
-        answer=answer,
+        answer=final_answer,
         source_text=verifier_src,
         source_ref=str(generator_input.get("source_ref") or ""),
         sid=sid,
@@ -505,7 +626,7 @@ def respond_from_chunk_stream(
         log_event,
         file=chunk.get("file"),
         score=round(float(chunk.get("_score", 0.0)), 3),
-        answer_length=len(answer),
+        answer_length=len(final_answer),
         generator_input=generator_input,
         verifier_triggered=v_trace.get("verifier_triggered"),
         verifier_trigger_reason=v_trace.get("verifier_trigger_reason"),
@@ -517,8 +638,9 @@ def respond_from_chunk_stream(
         else None
     )
     final = finalize_ask(payload, sid, q, doc_id=doc_id, turn_meta=turn_meta, route=route)
-    if answer.strip():
-        mem_add_bot(sid, answer)
+    bot_text = str(final.get("answer") or final_answer).strip()
+    if bot_text:
+        mem_add_bot(sid, bot_text)
     yield f"event: ui\ndata: {_json.dumps(final, ensure_ascii=False, default=_sse_default)}\n\n"
     yield "event: done\ndata: {}\n\n"
 

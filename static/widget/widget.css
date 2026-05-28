@@ -747,6 +747,61 @@
   word-break: break-word;
 }
 
+.clinic-msg__body--rich {
+  white-space: normal;
+}
+
+.clinic-msg__body--rich p {
+  margin: 0 0 0.65em;
+}
+
+.clinic-msg__body--rich p:last-child {
+  margin-bottom: 0;
+}
+
+.clinic-msg__body--rich .clinic-msg__lead {
+  margin-bottom: 0.5em;
+}
+
+.clinic-msg__body--rich ul,
+.clinic-msg__body--rich ol {
+  margin: 0.35em 0 0.75em;
+  padding: 0;
+  list-style: none;
+}
+
+.clinic-msg__body--rich ol {
+  list-style: decimal;
+  padding-left: 1.35em;
+}
+
+.clinic-msg__body--rich ul li {
+  position: relative;
+  padding-left: 1.15em;
+  margin-bottom: 0.4em;
+}
+
+.clinic-msg__body--rich ul li::before {
+  content: "";
+  position: absolute;
+  left: 0.2em;
+  top: 0.62em;
+  width: 0.32em;
+  height: 0.32em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.72;
+}
+
+.clinic-msg__body--rich ol li {
+  margin-bottom: 0.4em;
+  padding-left: 0.15em;
+}
+
+.clinic-msg__body--rich strong {
+  font-weight: 600;
+}
+
 .clinic-msg--has-video {
   max-width: min(300px, calc(100% - 8px));
 }

@@ -71,6 +71,7 @@ def _fresh_defaults() -> dict:
         "last_catalog_service_id": None,
         "pending_lead_offer": False,
         "user_turn_timestamps": [],
+        "consult_streak": 0,
     }
 
 
@@ -335,6 +336,30 @@ def set_last_catalog_service(session_id: str, service_id: str) -> None:
         _persist_unlocked(session_id, st)
 
 
+def get_consult_streak(session_id: str) -> int:
+    with _lock:
+        st = mem_get(session_id)
+        return int(st.get("consult_streak") or 0)
+
+
+def reset_consult_streak(session_id: str) -> None:
+    with _lock:
+        st = mem_get(session_id)
+        if int(st.get("consult_streak") or 0) == 0:
+            return
+        st["consult_streak"] = 0
+        _persist_unlocked(session_id, st)
+
+
+def increment_consult_streak(session_id: str) -> int:
+    with _lock:
+        st = mem_get(session_id)
+        n = int(st.get("consult_streak") or 0) + 1
+        st["consult_streak"] = n
+        _persist_unlocked(session_id, st)
+        return n
+
+
 def set_current_doc(session_id: str, doc_id: str) -> None:
     with _lock:
         st = mem_get(session_id)
@@ -342,6 +367,7 @@ def set_current_doc(session_id: str, doc_id: str) -> None:
         new_id = (doc_id or "").strip()
         if new_id and prev and prev != new_id:
             _upsert_topic_state(st, new_id, {"suggest_ref_used": False})
+            st["consult_streak"] = 0
         st["current_doc_id"] = doc_id
         _persist_unlocked(session_id, st)
 

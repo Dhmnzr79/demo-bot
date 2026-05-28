@@ -1,4 +1,5 @@
 ﻿import { postAsk, streamAsk } from "./api.js";
+import { setBotAnswerBody } from "./answer_format.js";
 
 const STORAGE_SID = "clinic_widget_sid";
 const DEFAULT_AVATAR_URL = "/static/avatar.png";
@@ -259,7 +260,7 @@ function scrollToLastTurnStart(feedEl) {
 
 function _updateLiveBubble(row, text, feed) {
   const body = row.querySelector(".clinic-msg__body");
-  if (body) body.textContent = text;
+  if (body) setBotAnswerBody(body, text);
   scrollChatPaneToEnd(feed);
 }
 
@@ -887,12 +888,32 @@ export function mountWidget(root, config) {
         if (!liveBubble && fullText.length > 0) {
           revealLiveBubble();
         }
+        const streamedText = fullText.trim();
         if (uiData) {
           if (uiData.meta && uiData.meta.sid) setSid(uiData.meta.sid);
           const turn = botTurnFromPayload(uiData);
-          if (turn && turn.text) state.messages.push(turn);
+          if (turn) {
+            // Текст ответа: единственный источник правды — то, что уже показали в стриме.
+            if (streamedText) turn.text = streamedText;
+            state.messages.push(turn);
+          }
           state.lastPayload = uiData;
           if (!state.isOpen) state.unread = true;
+        } else if (streamedText) {
+          state.messages.push({
+            role: "bot",
+            text: streamedText,
+            followups: [],
+            quickReplies: [],
+            linksDismissed: false,
+            videoKey: "",
+            videoSrc: "",
+            videoTitleText: "",
+            videoRevealed: false,
+            situation: null,
+            cta: null,
+            trailingDismissed: false,
+          });
         }
         endPendingRequest();
         if (state.unread && !state.isOpen) unreadDot.classList.add("is-visible");
@@ -1145,7 +1166,7 @@ export function mountWidget(root, config) {
       if (text) {
         const body = document.createElement("div");
         body.className = "clinic-msg__body";
-        body.textContent = text;
+        setBotAnswerBody(body, text);
         bubble.appendChild(body);
       }
       appendVideoOffer(bubble, m, idx);

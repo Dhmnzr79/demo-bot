@@ -257,9 +257,13 @@ def generate_facts_card_answer(
     sid: str,
     client_id: str | None,
     user_question: str = "",
+    consult_nudge: str | None = None,
 ) -> str | None:
     if not facts:
         return None
+    from core.consult_nudge import consult_nudge_prompt_addon
+
+    system = _FACTS_CARD_SYSTEM + consult_nudge_prompt_addon(consult_nudge)  # type: ignore[arg-type]
     facts_block = "\n".join(f"- {f}" for f in facts)
     q_line = f"Вопрос пациента: {user_question}\n\n" if user_question else ""
     user_msg = f"{q_line}Услуга: {title}\n\nФакты:\n{facts_block}"
@@ -271,7 +275,7 @@ def generate_facts_card_answer(
             response_format={"type": "json_object"},
             timeout=LLM_REQUEST_TIMEOUT_SEC,
             messages=[
-                {"role": "system", "content": _FACTS_CARD_SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_msg},
             ],
         )
@@ -309,6 +313,35 @@ BASE_SYSTEM = (
     "(«если хотите, могу ещё рассказать», «могу сравнить дальше», «могу продолжить») — "
     "продолжение только через кнопки интерфейса, если они есть."
 )
+
+# См. docs/WIDGET_ANSWER_FORMAT.md — контракт с виджетом.
+RESPONSE_FORMAT = (
+    "\n\nФормат текста ответа (виджет чата, см. WIDGET_ANSWER_FORMAT):\n"
+    "Используй безопасный поднабор Markdown в тексте для пациента.\n"
+    "Разрешено: короткие абзацы (между абзацами — пустая строка); списки «- пункт»; "
+    "нумерованные «1. пункт»; выделение **только** для сумм с ₽, процентов, сроков "
+    "(например **3–6 месяцев**, **1 год**), **Этап 1** / **Этап 2**, слова **пожизненная**.\n"
+    "Нельзя выделять **бренды**, названия систем, заголовки пунктов и обычные слова.\n"
+    "В списке цен формат: Implantium (Южная Корея) — **76 200 ₽** (жирным только цена).\n"
+    "Запрещено: заголовки #, ссылки, HTML, вложенные списки, таблицы, "
+    "символы галочки или • вручную.\n"
+    "Структура: максимум одна короткая вводная фраза (или сразу суть); "
+    "список только если 3+ однотипных пункта (цены, шаги, варианты); "
+    "1–2 факта — связным абзацем, не списком.\n"
+    "Обязательно: если в ответе есть список, сначала дай одну короткую вводную фразу "
+    "по смыслу связанную со списком (цены, этапы, варианты), уже потом список. "
+    "Никогда не начинай ответ сразу со списка.\n"
+    "Первый символ ответа не должен быть маркером списка: «-», «•», «1.» — "
+    "сначала хотя бы одно предложение вводного текста.\n"
+    "Не копируй служебную разметку источника. Не заканчивай ответ предложением "
+    "продолжить тему — это делают кнопки интерфейса."
+)
+
+def _consult_nudge_addon(meta: dict) -> str:
+    from core.consult_nudge import consult_nudge_prompt_addon
+
+    return consult_nudge_prompt_addon(meta.get("consult_nudge"))
+
 
 GENERATOR_SINGLE_SOURCE_RULE = (
     "\n\n"
@@ -413,8 +446,14 @@ EMPATHY_ADDON = (
 )
 
 JSON_ANSWER_RULE = (
-    ' Ответь одним JSON-объектом с единственным ключом "answer" (строка с текстом для пациента). '
-    "Без markdown, без пояснений вне JSON."
+    ' Ответь одним JSON-объектом с единственным ключом "answer" '
+    "(строка для пациента в формате RESPONSE_FORMAT выше). "
+    "Без пояснений вне JSON."
+)
+
+PLAIN_ANSWER_RULE = (
+    "\n\nОтветь только текстом для пациента в формате RESPONSE_FORMAT выше. "
+    "Без JSON-обёртки, без пояснений вне ответа."
 )
 
 
@@ -463,9 +502,17 @@ def build_messages_for_gpt(
     allow_empathy = bool(EMPATHY_ON and meta.get("empathy_enabled"))
     first_in_topic = is_first_in_topic(session_id, doc_key)
     use_empathy = bool(allow_empathy and first_in_topic)
-    system_prompt = BASE_SYSTEM + GENERATOR_SINGLE_SOURCE_RULE + (EMPATHY_ADDON if use_empathy else "")
+    system_prompt = (
+        BASE_SYSTEM
+        + RESPONSE_FORMAT
+        + GENERATOR_SINGLE_SOURCE_RULE
+        + (EMPATHY_ADDON if use_empathy else "")
+        + _consult_nudge_addon(meta)
+    )
     if CHAT_JSON_MODE and not force_text:
         system_prompt += JSON_ANSWER_RULE
+    elif force_text:
+        system_prompt += PLAIN_ANSWER_RULE
 
     src0 = norm[0]
     dialog_block = ""

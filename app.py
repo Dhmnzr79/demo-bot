@@ -303,8 +303,20 @@ def _service_reply(
     track_user: bool = True,
     route: str | None = None,
 ):
+    from core.consult_nudge import record_consult_nudge_after_answer, reset_consult_nudge_on_route
+
+    reset_consult_nudge_on_route(route, sid)
     if track_user and q:
         mem_add_user(sid, q)
+    r = (route or "").strip().lower()
+    if r == "price_lookup" and not is_active_lead_flow(mem_get(sid)):
+        pmeta = payload.get("meta") or {}
+        record_consult_nudge_after_answer(
+            sid,
+            route,
+            pmeta.get("consult_nudge"),
+            str(payload.get("answer") or ""),
+        )
     answer = (payload.get("answer") or "").strip()
     turn_meta = None
     if track_user and (q or "").strip():
@@ -1829,8 +1841,20 @@ def _sse_service_reply(
     route: str | None = None,
 ):
     """Обёртка _service_reply для SSE: один event ui + done."""
+    from core.consult_nudge import record_consult_nudge_after_answer, reset_consult_nudge_on_route
+
+    reset_consult_nudge_on_route(route, sid)
     if track_user and q:
         mem_add_user(sid, q)
+    r = (route or "").strip().lower()
+    if r == "price_lookup" and not is_active_lead_flow(mem_get(sid)):
+        pmeta = payload.get("meta") or {}
+        record_consult_nudge_after_answer(
+            sid,
+            route,
+            pmeta.get("consult_nudge"),
+            str(payload.get("answer") or ""),
+        )
     answer = (payload.get("answer") or "").strip()
     turn_meta = None
     if track_user and (q or "").strip():
