@@ -1,0 +1,18 @@
+# clients/_template/tone.yaml
+bot_name: null
+
+lead:
+  name_prompt: "Хорошо, помогу с записью. Как к вам можно обращаться?"
+  submit_ok: "Спасибо! Администратор свяжется с вами в ближайшее время."
+
+situation:
+  prompt: null
+
+guided_menu:
+  answer: null
+
+continuation:
+  clarify_answer: null
+
+fallback:
+  bare_affirmative: null

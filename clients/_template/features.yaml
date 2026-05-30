@@ -1,0 +1,16 @@
+# clients/_template/features.yaml — скопировать в clients/{new_client_id}/
+leads:
+  enabled: true
+  mode: email
+
+admin:
+  enabled: true
+
+postgres_events:
+  enabled: true
+
+guide_router:
+  enabled: false
+
+ingress:
+  strict: true

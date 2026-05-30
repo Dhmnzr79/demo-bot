@@ -1,0 +1,100 @@
+{
+  "tomography": {
+    "name": "КТ (компьютерная томография)",
+    "price_type": "fixed",
+    "value": 3000,
+    "currency": "RUB",
+    "note": null
+  },
+  "professional_whitening": {
+    "name": "Профессиональное отбеливание",
+    "price_type": "from",
+    "value": 18000,
+    "currency": "RUB",
+    "note": "Точная стоимость зависит от выбранного протокола"
+  },
+  "caries": {
+    "name": "Лечение кариеса",
+    "price_type": "from",
+    "value": 6500,
+    "currency": "RUB",
+    "note": "Зависит от глубины поражения и объёма пломбирования"
+  },
+  "pulpitis": {
+    "name": "Лечение пульпита",
+    "price_type": "from",
+    "value": 12000,
+    "currency": "RUB",
+    "note": "Лечение каналов и восстановление зуба; при необходимости — коронка отдельно"
+  },
+  "teeth_treatment": {
+    "name": "Лечение зубов",
+    "price_type": "from",
+    "value": 8500,
+    "currency": "RUB",
+    "note": null
+  },
+  "tooth_extraction": {
+    "name": "Удаление зуба",
+    "price_type": "from",
+    "value": 4500,
+    "currency": "RUB",
+    "note": "Простое удаление; сложное или зуб мудрости — по результатам осмотра"
+  },
+  "periodontitis": {
+    "name": "Лечение пародонтита",
+    "price_type": "from",
+    "value": 15000,
+    "currency": "RUB",
+    "note": "Комплекс терапии; точный план после диагностики дёсен"
+  },
+  "aligners": {
+    "name": "Элайнеры для выравнивания зубов",
+    "price_type": "from",
+    "value": 195000,
+    "currency": "RUB",
+    "note": "Полный курс лечения; зависит от сложности прикуса и количества кап"
+  },
+  "veneers": {
+    "name": "Виниры E-max",
+    "price_type": "from",
+    "value": 35000,
+    "currency": "RUB",
+    "note": "За один зуб; полная реставрация улыбки рассчитывается на консультации"
+  },
+  "zirconia_crowns": {
+    "name": "Коронки из диоксида циркония",
+    "price_type": "from",
+    "value": 25000,
+    "currency": "RUB",
+    "note": "Стоимость зависит от сложности работы и типа конструкции (одиночная коронка или мост)"
+  },
+  "clasp_dentures": {
+    "name": "Бюгельные протезы",
+    "price_type": "from",
+    "value": 85000,
+    "currency": "RUB",
+    "note": "Частичное восстановление; вариант на кламмерах или замках"
+  },
+  "removable_dentures": {
+    "name": "Съёмное протезирование",
+    "price_type": "from",
+    "value": 45000,
+    "currency": "RUB",
+    "note": "Частичный протез; полный съёмный протез — от 65 000 ₽"
+  },
+  "implant_supported_prosthetics": {
+    "name": "Протезирование на имплантах",
+    "price_type": "from",
+    "value": 31000,
+    "currency": "RUB",
+    "note": "Ортопедический этап (коронка/мост); имплантация оплачивается отдельно"
+  },
+  "temporary_teeth": {
+    "name": "Временная коронка на импланте",
+    "price_type": "from",
+    "value": 18000,
+    "currency": "RUB",
+    "note": "Временный протез на период приживления; постоянная коронка — отдельно"
+  }
+}

@@ -1,0 +1,11 @@
+# clients/nikadent/brand.yaml — фиолетовый + оранжевый акцент
+clinic_name: "НикаДент"
+logo_url: "/static/avatar.png"
+
+colors:
+  brand: "#7c3aed"
+  brand_hover: "#6d28d9"
+  brand_deep: "#5b21b6"
+  brand_light: "#a78bfa"
+  brand_soft: "#ddd6fe"
+  accent: "#f97316"

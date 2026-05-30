@@ -1,0 +1,11 @@
+# clients/cesi/brand.yaml — бирюзовая палитра
+clinic_name: "ЦЭСИ"
+logo_url: "/static/avatar.png"
+
+colors:
+  brand: "#0d9488"
+  brand_hover: "#0f766e"
+  brand_deep: "#115e59"
+  brand_light: "#2dd4bf"
+  brand_soft: "#99f6e4"
+  accent: "#14b8a6"

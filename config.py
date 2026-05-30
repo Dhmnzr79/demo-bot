@@ -102,7 +102,7 @@ _ac_raw = os.getenv("ALLOWED_CLIENTS", "").strip()
 if _ac_raw:
     ALLOWED_CLIENTS = frozenset(x.strip() for x in _ac_raw.split(",") if x.strip())
 else:
-    ALLOWED_CLIENTS = frozenset({DEFAULT_CLIENT_ID})
+    ALLOWED_CLIENTS = frozenset({DEFAULT_CLIENT_ID, "demo", "cesi", "nikadent"})
 
 # --- Детерминированный роутинг до LLM ---
 CONTACTS_RE = re.compile(

@@ -1,0 +1,10 @@
+# clients/_template/brand.yaml
+clinic_name: "REPLACE_CLINIC_NAME"
+logo_url: null
+
+colors:
+  brand: null
+  brand_hover: null
+  brand_deep: null
+  brand_light: null
+  brand_soft: null

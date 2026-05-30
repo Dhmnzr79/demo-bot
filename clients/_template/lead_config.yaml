@@ -1,0 +1,6 @@
+# clients/_template/lead_config.yaml
+delivery: email
+recipients:
+  - REPLACE_WITH_ADMIN_EMAIL
+subject_template: "Заявка с бота REPLACE_CLINIC_NAME"
+store_in_postgres: true

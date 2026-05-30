@@ -1,0 +1,16 @@
+# clients/cesi/features.yaml — боевая клиника ЦЭСИ (Phase M1 scaffold)
+leads:
+  enabled: true
+  mode: email
+
+admin:
+  enabled: true
+
+postgres_events:
+  enabled: true
+
+guide_router:
+  enabled: false
+
+ingress:
+  strict: true

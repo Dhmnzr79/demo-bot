@@ -1,0 +1,30 @@
+{
+  "pack_id": "cesi",
+  "clientId": "cesi",
+  "allowed_origins": [
+    "https://cesi.bot.artgents.ru",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000"
+  ],
+  "botName": "Алина",
+  "onlineLabel": "ИИ-консультант ЦЭСИ",
+  "launcherSubtitle": "Консультант стоматологии ЦЭСИ",
+  "launcherCtaLabel": "Задать вопрос",
+  "demoLauncher": false,
+  "welcomeText": "Здравствуйте!\nЯ ИИ-консультант ЦЭСИ. Помогу с услугами, ценами, врачами и записью — задайте вопрос или выберите тему ниже.",
+  "avatarUrl": "/static/avatar.png",
+  "videoAspect": "horizontal",
+  "theme": {
+    "brand": "#0d9488",
+    "brandHover": "#0f766e",
+    "brandDeep": "#115e59",
+    "brandLight": "#2dd4bf",
+    "brandSoft": "#99f6e4",
+    "accent": "#14b8a6"
+  },
+  "starterPrompts": [
+    { "label": "Я боюсь боли", "q": "Я боюсь боли" },
+    { "label": "Расскажите про all-on-4", "q": "Расскажите про all-on-4" },
+    { "label": "Посмотреть видео с врачом", "videoKey": "pain-doctor-explains" }
+  ]
+}

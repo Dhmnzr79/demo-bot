@@ -1,0 +1,3 @@
+# clients/demo/lead_config.yaml — заявки не уходят наружу (demo_stub)
+delivery: demo_stub
+success_message_key: lead_submit_ok

@@ -1,0 +1,394 @@
+{
+  "tomography": {
+    "title": "КТ (компьютерная томография)",
+    "aliases": [
+      "кт",
+      "кт зубов",
+      "компьютерная томография",
+      "снимок зуба",
+      "томография зуба"
+    ],
+    "active": true,
+    "response_mode": "card",
+    "facts": [
+      "помогает врачу оценить анатомию и объем костной ткани",
+      "используется для точного планирования лечения",
+      "при наличии свежего КТ (до 1 месяца) врач может использовать уже готовое исследование"
+    ],
+    "md_entry_ref": null,
+    "price_key": "tomography",
+    "price_ref": null,
+    "price_display": "always",
+    "suggest_refs": []
+  },
+  "professional_whitening": {
+    "title": "Профессиональное отбеливание",
+    "aliases": [
+      "отбеливание",
+      "отбеливание зубов",
+      "отбелить зубы",
+      "осветлить зубы",
+      "зубы пожелтели"
+    ],
+    "active": true,
+    "response_mode": "card",
+    "facts": [
+      "осветляет зубы на 7–10 тонов за одно посещение",
+      "проходит под контролем врача, поэтому процедура безопасна для эмали",
+      "не вредит эмали, в отличие от многих домашних способов",
+      "даёт предсказуемый результат, потому что врач заранее оценивает эффект",
+      "сохраняет эффект на 3–5 лет при правильном уходе"
+    ],
+    "md_entry_ref": null,
+    "price_key": "professional_whitening",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": [
+      {
+        "label": "Условия оплаты",
+        "ref": "clinic__info__payment_terms.md#korotko"
+      }
+    ]
+  },
+  "classic": {
+    "title": "Классическая имплантация",
+    "aliases": [
+      "классическая имплантация",
+      "поставить имплант",
+      "вставить зуб",
+      "двухэтапная имплантация",
+      "имплант на один зуб",
+      "один имплант"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "implantation__service__classic",
+    "price_key": "classic",
+    "price_ref": "implantation__pricing__implants.md#korotko",
+    "concern_ref": "implantation__faq__cost.md#korotko",
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "one_stage": {
+    "title": "Одномоментная имплантация",
+    "aliases": [
+      "одномоментная имплантация",
+      "имплант сразу после удаления",
+      "удаление и имплант",
+      "имплант в день удаления"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "implantation__service__one_stage",
+    "price_key": "one_stage",
+    "price_ref": "implantation__pricing__implants.md#korotko",
+    "concern_ref": "implantation__faq__cost.md#korotko",
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "all_on_4": {
+    "title": "Имплантация All-on-4",
+    "aliases": [
+      "all-on-4",
+      "имплантация all-on-4",
+      "все на четырёх",
+      "восстановление всех зубов на 4",
+      "протез на 4 имплантах"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "implantation__service__all_on_4",
+    "price_key": "all_on_4",
+    "price_ref": "implantation__pricing__all_on_4.md#korotko",
+    "concern_ref": "implantation__faq__cost.md#korotko",
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "all_on_6": {
+    "title": "Имплантация All-on-6",
+    "aliases": [
+      "all-on-6",
+      "имплантация all-on-6",
+      "все на шести",
+      "все зубы на 6 имплантах",
+      "протез на 6 имплантах"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "implantation__service__all_on_6",
+    "price_key": "all_on_6",
+    "price_ref": "implantation__pricing__all_on_6.md#korotko",
+    "concern_ref": "implantation__faq__cost.md#korotko",
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "temporary_teeth": {
+    "title": "Временные зубы на имплантах",
+    "aliases": [
+      "временные зубы",
+      "временная коронка",
+      "временный зуб на имплант",
+      "временные зубы на имплантах",
+      "зачем нужна временная коронка"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "implantation__service__temporary_teeth",
+    "price_key": "temporary_teeth",
+    "price_ref": null,
+    "concern_ref": "implantation__faq__cost.md#korotko",
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "implant_supported_prosthetics": {
+    "title": "Протезирование на имплантах",
+    "aliases": [
+      "протезирование на имплантах",
+      "зубы на имплантах",
+      "несъемные зубы на имплантах",
+      "несъёмные зубы на имплантах",
+      "восстановить зубы на имплантах",
+      "протез на имплантах",
+      "импланты с коронками"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "prosthetics__service__implant_supported_prosthetics",
+    "price_key": "implant_supported_prosthetics",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "caries": {
+    "title": "Лечение кариеса",
+    "aliases": [
+      "лечение кариеса",
+      "кариес",
+      "дырка в зубе",
+      "пломба",
+      "поставить пломбу",
+      "вылечить зуб",
+      "зуб с кариесом",
+      "темное пятно на зубе",
+      "зуб реагирует на холодное",
+      "зуб реагирует на сладкое"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "treatment__service__caries",
+    "price_key": "caries",
+    "price_ref": null,
+    "price_display": "always",
+    "suggest_refs": [
+      {
+        "label": "Условия оплаты",
+        "ref": "clinic__info__payment_terms.md#korotko"
+      }
+    ]
+  },
+  "pulpitis": {
+    "title": "Лечение пульпита",
+    "aliases": [
+      "лечение пульпита",
+      "пульпит",
+      "пультип",
+      "болит зуб",
+      "сильно болит зуб",
+      "острая зубная боль",
+      "болит зуб ночью",
+      "удалить нерв",
+      "лечение каналов"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "treatment__service__pulpitis",
+    "price_key": "pulpitis",
+    "price_ref": null,
+    "price_display": "always",
+    "suggest_refs": [
+      {
+        "label": "Условия оплаты",
+        "ref": "clinic__info__payment_terms.md#korotko"
+      }
+    ]
+  },
+  "teeth_treatment": {
+    "title": "Лечение зубов",
+    "aliases": [
+      "лечение зубов",
+      "лечить зубы",
+      "вылечить зубы",
+      "стоматологическое лечение",
+      "терапевтическая стоматология"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "treatment__service__teeth_treatment",
+    "price_key": "teeth_treatment",
+    "price_ref": null,
+    "price_display": "always",
+    "suggest_refs": [
+      {
+        "label": "Условия оплаты",
+        "ref": "clinic__info__payment_terms.md#korotko"
+      }
+    ]
+  },
+  "tooth_extraction": {
+    "title": "Удаление зубов любой сложности",
+    "aliases": [
+      "удаление зуба",
+      "удалить зуб",
+      "вырвать зуб",
+      "удаление зуба мудрости",
+      "сложное удаление",
+      "ретинированный зуб"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "extraction__service__tooth_extraction",
+    "price_key": "tooth_extraction",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "periodontitis": {
+    "title": "Лечение пародонтита",
+    "aliases": [
+      "лечение пародонтита",
+      "пародонтит",
+      "парадонтит",
+      "лечение пародонтоза",
+      "пародонтоз",
+      "пародонтолог",
+      "болят десны",
+      "кровоточат десны",
+      "шатаются зубы",
+      "оголились корни зубов",
+      "воспаление десен"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "periodontology__service__periodontitis",
+    "price_key": "periodontitis",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "aligners": {
+    "title": "Элайнеры для выравнивания зубов",
+    "aliases": [
+      "элайнеры",
+      "капы для зубов",
+      "прозрачные капы",
+      "выровнять зубы",
+      "исправить прикус",
+      "кривые зубы"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "orthodontics__service__aligners",
+    "price_key": "aligners",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "veneers": {
+    "title": "Виниры E-max",
+    "aliases": [
+      "виниры",
+      "виниры на зубы",
+      "виниры e-max",
+      "голливудская улыбка",
+      "накладки на зубы"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "prosthetics__service__veneers",
+    "price_key": "veneers",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "zirconia_crowns": {
+    "title": "Коронки из диоксида циркония",
+    "aliases": [
+      "коронки",
+      "коронка на зуб",
+      "зубная коронка",
+      "поставить коронку",
+      "циркониевая коронка",
+      "коронка из диоксида циркония",
+      "восстановить разрушенный зуб"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "prosthetics__service__zirconia_crowns",
+    "price_key": "zirconia_crowns",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": [
+      {
+        "label": "Условия оплаты",
+        "ref": "clinic__info__payment_terms.md#korotko"
+      }
+    ]
+  },
+  "clasp_dentures": {
+    "title": "Бюгельные протезы",
+    "aliases": [
+      "бюгельные протезы",
+      "бюгельный протез",
+      "протез с дугой",
+      "частичный протез с дугой",
+      "протез на кламмерах",
+      "протез на замках"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "prosthetics__service__clasp_dentures",
+    "price_key": "clasp_dentures",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  },
+  "removable_dentures": {
+    "title": "Съёмное протезирование",
+    "aliases": [
+      "съемное протезирование",
+      "съёмное протезирование",
+      "съемные протезы",
+      "съёмные протезы",
+      "зубной протез",
+      "протез если нет зубов",
+      "вставная челюсть",
+      "частичный зубной протез",
+      "полный съемный протез",
+      "полный съёмный протез",
+      "нет всех зубов"
+    ],
+    "active": true,
+    "response_mode": null,
+    "facts": [],
+    "md_entry_ref": "prosthetics__service__removable_dentures",
+    "price_key": "removable_dentures",
+    "price_ref": null,
+    "price_display": "on_request",
+    "suggest_refs": []
+  }
+}

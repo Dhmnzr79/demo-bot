@@ -19,6 +19,7 @@ from config import (
     RETRIEVE_CACHE_MAXSIZE,
     RETRIEVE_CACHE_TTL_SEC,
 )
+from core.client_runtime import effective_corpus_client_id
 from core.routing_loader import THRESHOLDS
 from llm import client
 from logging_setup import get_logger, log_json, log_llm_usage
@@ -86,6 +87,7 @@ def extract_id_from_heading(txt: str) -> str | None:
 def get_chunk_by_ref(ref: str, *, client_id: str | None = None) -> dict | None:
     if not ref or "#" not in ref:
         return None
+    corpus_cid = effective_corpus_client_id(client_id)
     fname, anchor = ref.split("#", 1)
     base = os.path.basename(fname)
     if not base.endswith(".md"):
@@ -93,8 +95,8 @@ def get_chunk_by_ref(ref: str, *, client_id: str | None = None) -> dict | None:
     a = (anchor or "").strip().lower()
     corpus = load_corpus_if_needed()
     cands = [ch for ch in corpus if os.path.basename(ch.get("file", "") or "") == base]
-    if client_id:
-        client_cands = [ch for ch in cands if (ch.get("client_id") or "") == client_id]
+    if corpus_cid:
+        client_cands = [ch for ch in cands if (ch.get("client_id") or "") == corpus_cid]
         if not client_cands:
             return None
         cands = client_cands
@@ -707,6 +709,7 @@ def _expand_alias_candidates_with_embed_topk(
 
 def run_alias_pipeline(q: str, *, client_id: str | None = None) -> dict[str, Any]:
     """PR #1.10: exact / near-exact + build-time alias embeddings + controlled rescue (+ optional legacy shadow)."""
+    client_id = effective_corpus_client_id(client_id)
     thr = THRESHOLDS.alias
     q_raw = (q or "").strip()
     q_norm = _norm_text(q)
@@ -1111,6 +1114,7 @@ def retrieve(
     if telemetry is not None:
         telemetry.setdefault("scope_widen_fallback", False)
 
+    client_id = effective_corpus_client_id(client_id)
     emb = _get_embeddings()
     q_in = (q or "").strip()
     q_norm = normalize_retrieval_query(q_in)
