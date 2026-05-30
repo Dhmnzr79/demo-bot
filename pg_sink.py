@@ -126,7 +126,7 @@ def _ensure_tables(conn) -> None:
             """
         )
 
-        # v5 trace-level logging schema (see `docs/ARCHITECTURE V5.md` §E1).
+        # v5 trace-level logging schema (see pg_sink tables / docs/DASHBOARD.md).
         # Phase 0: schema only (no runtime writes yet).
         cur.execute(
             """

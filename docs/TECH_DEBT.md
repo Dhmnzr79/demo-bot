@@ -1,37 +1,47 @@
 # Tech Debt
 
-Здесь фиксируются временные решения, компромиссы и места, которые могут помешать масштабированию.
+Активный долг. План работ: **`MULTICLIENT.md`**. Runtime: **`CURRENT_ARCHITECTURE.md`**.
 
-## SQLite + single worker
+---
 
-Сейчас проект работает через SQLite и один worker gunicorn. Это допустимо для demo-prod одного клиента, но может стать ограничением для мультиклиентности и нагрузки.
+## Multiclient (блокер изоляции)
 
-Решение на будущее:
-- оценить переход на PostgreSQL;
-- продумать миграции;
-- отдельно хранить usage, sessions, leads, tenants.
+| Проблема | Направление |
+|----------|-------------|
+| Корневой `md/` + `clients/default/` | M1: только `clients/{id}/` |
+| Один `DATA_DIR` / corpus | M2: `client_data_loader` |
+| Один `SQLITE_PATH` | M2: `session.py` → `data/{id}/bot.db` |
+| `doctors_lookup` → корневой `md/` | M1 |
+| Нет Origin guard на `/ask` | M1 |
+| Lead stub hardcoded | M3: `lead_config.yaml` |
 
-## Нет полноценной multitenant-изоляции
+---
 
-Сейчас проект ориентирован на одного клиента/default. Будущая мультиклиентность требует аккуратной изоляции данных, контента, логов, тарифов и настроек.
+## Runtime / код
 
-Решение на будущее:
-- clients/{client_id};
-- tenant config;
-- отдельные индексы/данные;
-- usage tracking по client_id.
+| Проблема | Направление |
+|----------|-------------|
+| `app.py` большой | Routing cleanup после M5 |
+| Legacy `classify_intent` + Resolver | evals → свести |
+| `enqueue_lead` не вызывается | M3 prod lead |
+| Нет `pending_followup_ref` | Guide phase |
 
-## JSONL: legacy + `bot_event` (два параллельных формата)
+---
 
-События с `kind=bot_event` добавлены для дашборда; старые `msg` вида `selection`, `Processing question` сохранены для обратной совместимости и отладки.
+## Качество
 
-Решение на будущее: выгрузка `bot_event` в Postgres (`bot_events`), сжатие/ротация по политике хранения.
+| Проблема | Направление |
+|----------|-------------|
+| Нет golden routing per client | Phase evals после M5 |
+| Evals частично (`evals/v5/`) | расширить по `client_id` |
 
-## Evals пока ручные
+---
 
-Пока нет автоматического набора проверочных сценариев.
+## Observability
 
-Решение на будущее:
-- создать evals/golden_questions.md;
-- затем сделать скрипт run_evals.py;
-- проверять ответы после изменений.
+| Проблема | Направление |
+|----------|-------------|
+| Admin требует PG — demo без | `features.yaml` |
+| JSONL + PG параллельно | норма, см. `DASHBOARD.md` |
+
+При закрытии — удалить строку из таблицы в PR.

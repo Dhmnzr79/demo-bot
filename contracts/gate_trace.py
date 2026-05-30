@@ -9,7 +9,7 @@ GateSource = Literal["regex", "rule", "catalog", "llm"]
 
 
 class GateTrace(BaseModel):
-    """Hard gate output contract. See `docs/ARCHITECTURE V5.md` §1.2."""
+    """Hard gate output contract. See `contracts/` and `docs/CURRENT_ARCHITECTURE.md`."""
 
     model_config = ConfigDict(extra="forbid")
 

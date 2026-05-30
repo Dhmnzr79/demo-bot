@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ArbiterDecision(BaseModel):
-    """A5 output contract. See `docs/ARCHITECTURE V5.md` §1.5."""
+    """Arbiter output contract. See `contracts/` and `docs/CURRENT_ARCHITECTURE.md`."""
 
     model_config = ConfigDict(extra="forbid")
 

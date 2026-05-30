@@ -1,50 +1,36 @@
 # Roadmap
 
-## Этап 1 — Укрепить текущего бота
+Краткий указатель. **Детали multiclient:** `MULTICLIENT.md` (M0–M6). **Runtime:** `CURRENT_ARCHITECTURE.md`.
 
-Цель: стабильный demo-prod для одного клиента.
+---
 
-Что важно:
-- не ломать текущий /ask и /lead;
-- улучшать качество ответов;
-- добавить evals;
-- фиксировать технический долг;
-- отслеживать стоимость LLM-вызовов.
+## Сейчас: Multiclient (Phase M0–M6)
 
-## Этап 2 — Подготовить псевдо-мультиклиентность
+| Фаза | Содержание |
+|------|------------|
+| **M0** | Инвентаризация контента demo / cesi / nikadent |
+| **M1** | `clients/{id}/`, client_runtime, doctors_lookup, Origin |
+| **M2** | `data/{id}/`, client_data_loader, session per client |
+| **M3** | `features.yaml`, `lead_config.yaml`, demo vs бой |
+| **M4** | Postgres + admin локально |
+| **M5** | Smoke, Caddy, VPS |
+| **M6** | Docs sync, удаление legacy `md/`, `default/` |
 
-Цель: несколько клиентов в одной кодовой базе, но без полноценного SaaS.
+---
 
-Возможные шаги:
-- clients/{client_id};
-- отдельные md, catalog, prices, bot_config для каждого клиента;
-- единый контракт API;
-- базовый usage logging по клиентам.
+## После M5
 
-## Этап 3 — Дашборд
+| Phase | Содержание |
+|-------|------------|
+| **Routing cleanup** | `ROUTING_MAP.md`, orchestration из `app.py` |
+| **Evals** | Golden routing per `client_id` |
+| **Guide layer** | `features.yaml` → guide_router |
+| **Live consultant** | dialog_manager |
+| **Platform** | n8n, Redis — только при необходимости |
 
-Цель: простая админка.
+---
 
-Возможности:
-- диалоги;
-- заявки;
-- вопросы без ответа;
-- частые вопросы;
-- стоимость LLM;
-- конверсия в заявку;
-- управление CTA и контентом.
+## Docs cleanup ✅
 
-## Этап 4 — Тарифы и лимиты
-
-Цель: превратить проект в управляемый продукт.
-
-Возможности:
-- тарифы;
-- лимиты сообщений;
-- лимиты клиентов;
-- usage tracking;
-- разные уровни функциональности.
-
-## Этап 5 — Платформа
-
-Цель: мультиклиентный продукт с управлением, аналитикой, интеграциями и расширяемой архитектурой.
+- Удалены дубликаты и `docs/archive/`
+- Канон: `README`, `MULTICLIENT`, `CURRENT_ARCHITECTURE`, `DASHBOARD`, `ROADMAP`, `TECH_DEBT`, `WIDGET_ANSWER_FORMAT`, `PRODUCT_PRINCIPLES`, `ROUTING_MAP`

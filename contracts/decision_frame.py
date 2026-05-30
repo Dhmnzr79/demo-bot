@@ -20,7 +20,7 @@ class DecisionFrameConfidence(BaseModel):
 
 
 class DecisionFrame(BaseModel):
-    """Resolver output contract. See `docs/ARCHITECTURE V5.md` §1.1."""
+    """Resolver output contract. See `contracts/` and `docs/CURRENT_ARCHITECTURE.md`."""
 
     model_config = ConfigDict(extra="forbid")
 

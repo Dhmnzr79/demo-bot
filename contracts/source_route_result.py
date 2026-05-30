@@ -27,7 +27,7 @@ MatchMethod = Literal[
 
 
 class SourceRouteResult(BaseModel):
-    """A3 output contract. See `docs/ARCHITECTURE V5.md` §1.3 and §A3."""
+    """A3 output contract. See `contracts/` and `docs/CURRENT_ARCHITECTURE.md`."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -9,7 +9,7 @@ DocType = Literal["faq", "service", "info", "pricing", "doctor", "contacts"]
 
 
 class RetrievalCandidate(BaseModel):
-    """A4 candidate contract. See `docs/ARCHITECTURE V5.md` §1.4."""
+    """Retrieval candidate contract. See `contracts/` and `docs/CURRENT_ARCHITECTURE.md`."""
 
     model_config = ConfigDict(extra="forbid")
 

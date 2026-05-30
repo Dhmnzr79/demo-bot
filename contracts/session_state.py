@@ -18,7 +18,7 @@ class SessionMessage(BaseModel):
 
 
 class SessionState(BaseModel):
-    """Session state contract (read by all layers). See `docs/ARCHITECTURE V5.md` §1.7."""
+    """Session state contract. See `docs/CURRENT_ARCHITECTURE.md` §9."""
 
     model_config = ConfigDict(extra="forbid")
 

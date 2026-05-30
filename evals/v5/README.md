@@ -1,6 +1,6 @@
 # v5 per-layer evals
 
-Этот каталог содержит per-layer golden sets и минимальный runner для v5 (см. `docs/ARCHITECTURE V5.md` §E3).
+Этот каталог содержит per-layer golden sets и smoke runner. Контекст: `docs/CURRENT_ARCHITECTURE.md`, multiclient: `docs/MULTICLIENT.md`, evals: `docs/ROADMAP.md`.
 
 ## Файлы
 

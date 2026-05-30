@@ -68,7 +68,7 @@ class CatalogMatchThresholds(BaseModel):
 
 
 class AliasThresholds(BaseModel):
-    """PR #1.10 alias pipeline thresholds (see IMPLEMENTATION_PLAN PR #1.10)."""
+    """PR #1.10 alias pipeline thresholds (see core/routing.yaml)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -91,7 +91,7 @@ class AliasThresholds(BaseModel):
 
 
 class Thresholds(BaseModel):
-    """Validated representation of `core/routing.yaml` (see ARCHITECTURE V5.md §D2)."""
+    """Validated representation of `core/routing.yaml` (see docs/CURRENT_ARCHITECTURE.md)."""
 
     model_config = ConfigDict(extra="forbid")
 
