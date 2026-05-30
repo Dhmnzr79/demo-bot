@@ -49,6 +49,7 @@ def _planned_consult_nudge_for_chunk(
     meta: dict,
     chunk: dict,
     topic_state: dict,
+    client_id: str | None = None,
 ) -> str | None:
     if is_active_lead_flow(mem_get(sid)):
         return None
@@ -57,7 +58,9 @@ def _planned_consult_nudge_for_chunk(
         topic_state,
         chunk_h3_id=chunk.get("h3_id"),
     )
-    kind = plan_consult_nudge(sid, route, topic_exhausted=exhausted)
+    kind = plan_consult_nudge(
+        sid, route, topic_exhausted=exhausted, client_id=client_id
+    )
     if kind:
         meta["consult_nudge"] = kind
     return kind
@@ -260,6 +263,8 @@ def respond_from_chunk(
     if (q or "").strip():
         mem_add_user(sid, q)
     meta = meta_for_chunk(chunk, client_id=client_id)
+    if client_id is not None:
+        meta["client_id"] = client_id
     doc_id = meta.get("doc_id")
     if doc_id:
         set_current_doc(sid, doc_id)
@@ -284,6 +289,7 @@ def respond_from_chunk(
         meta=meta,
         chunk=chunk,
         topic_state=tstate_pre,
+        client_id=client_id,
     )
 
     answer, profile = generate_answer_with_empathy(
@@ -443,6 +449,8 @@ def respond_from_chunk_stream(
     if (q or "").strip():
         mem_add_user(sid, q)
     meta = meta_for_chunk(chunk, client_id=client_id)
+    if client_id is not None:
+        meta["client_id"] = client_id
     doc_id = meta.get("doc_id")
     if doc_id:
         set_current_doc(sid, doc_id)
@@ -467,6 +475,7 @@ def respond_from_chunk_stream(
         meta=meta,
         chunk=chunk,
         topic_state=tstate_pre,
+        client_id=client_id,
     )
 
     fmt_ctx = _answer_format_context(

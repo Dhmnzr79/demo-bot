@@ -38,6 +38,12 @@ from config import (
     resolve_client_id,
 )
 from contracts.ask_orchestration import AskOrchestrationResult
+from core.client_config_loader import (
+    load_ui_bundle,
+    load_widget_config,
+    tone_to_txt_dict,
+    ui_menu_to_payload,
+)
 from core.routing_loader import THRESHOLDS
 from core.video_catalog_loader import catalog_for_widget, get_external_video_src
 from lead_service import handle_lead
@@ -149,75 +155,20 @@ logger = get_logger("bot")
 APP_ENV = (os.getenv("APP_ENV") or "local").strip().lower()
 _APPLY_POLICY_PARAMS = inspect.signature(apply_response_policy).parameters
 init_pg_sink(logger)
-TXT = {
-    "lead_name_prompt": "Хорошо, помогу с записью. Как к вам можно обращаться?",
-    "lead_name_retry": "Как к вам можно обращаться? Напишите, пожалуйста, имя.",
-    "lead_name_hard": "Напишите просто имя — например, Мария или Андрей.",
-    "lead_name_invalid": "Не совсем поняла — напишите просто имя, например Мария.",
-    "lead_name_confirm_tpl": "Вас зовут {name}, правильно?",
-    "lead_name_reenter": "Хорошо. Как к вам можно обращаться?",
-    "lead_phone_prompt_tpl": (
-        "{name}, оставьте, пожалуйста, номер телефона — администратор свяжется с вами, "
-        "чтобы подтвердить запись."
-    ),
-    "lead_phone_retry": "Не получилось распознать номер. Напишите в формате +7XXXXXXXXXX.",
-    "lead_submit_ok": (
-        "Спасибо! Это демо-бот: заявка никуда не ушла, звонка не будет. "
-        "В рабочем боте для клиники после телефона заявка автоматически придёт вам на почту и в CRM."
-    ),
-    "lead_submit_error": "Что-то пошло не так. Проверьте номер и попробуйте ещё раз.",
-    "situation_prompt": (
-        "Опишите коротко ситуацию — что болит, что беспокоит, или просто какой вопрос. "
-        "Врач заранее будет в курсе и это поможет при консультации"
-    ),
-    "situation_retry_short": (
-        "Напишите чуть подробнее — буквально 1–2 фразы. "
-        "Чем точнее, тем лучше врач подготовится."
-    ),
-    "situation_to_lead_name": (
-        "Спасибо, записала. Эту информацию передадим в клинику, "
-        "чтобы врач заранее понимал вашу ситуацию. Как к вам можно обращаться?"
-    ),
-    "situation_back_fallback": "Хорошо, продолжим. Задайте вопрос или выберите тему.",
-    "followup_choose_topic": "Могу рассказать про этапы или про сроки — что выбрать?",
-    "lead_offer_declined": "Хорошо. Если появятся вопросы — спрашивайте.",
-    "bare_affirmative_fallback": (
-        "Напишите, пожалуйста, ваш вопрос — так будет проще подсказать."
-    ),
-}
-GUIDED_MENU_ANSWER = (
-    "Могу коротко подсказать и помочь выбрать направление — что для вас важнее?"
-)
-CONTINUATION_CLARIFY_ANSWER = (
-    "Могу подсказать по услугам, ценам, врачам или записи. Что вас интересует?"
-)
 
 
-def _guided_quick_replies() -> list[dict]:
-    return [
-        {"label": "Стоимость имплантации", "ref": "implantation__pricing__implants.md#korotko"},
-        {"label": "Больно ли ставить имплант?", "ref": "implantation__faq__pain.md#korotko"},
-        {"label": "Что будет на консультации?", "ref": "clinic__info__consultation.md#korotko"},
-        {"label": "Хочу записаться", "ref": "lead:booking"},
-    ]
+def _client_txt(client_id: str | None) -> dict[str, str]:
+    return tone_to_txt_dict(client_id)
 
 
 def _guided_menu_payload(sid: str, client_id: str | None) -> dict:
-    return _service_payload(
-        GUIDED_MENU_ANSWER,
-        sid,
-        client_id,
-        quick_replies=_guided_quick_replies(),
-    )
+    ui = load_ui_bundle(client_id)
+    return ui_menu_to_payload(ui.guided_menu, sid=sid, client_id=client_id)
 
 
 def _continuation_clarify_payload(sid: str, client_id: str | None) -> dict:
-    return _service_payload(
-        CONTINUATION_CLARIFY_ANSWER,
-        sid,
-        client_id,
-        quick_replies=_guided_quick_replies(),
-    )
+    ui = load_ui_bundle(client_id)
+    return ui_menu_to_payload(ui.continuation_clarify, sid=sid, client_id=client_id)
 
 
 def _lead_flow_orchestration_result(
@@ -1189,7 +1140,7 @@ def _orchestrate_ask_turn(data: dict):
                 service_route=ingress_service_route(ingress_res),
                 decision_frame=_orch_decision_dump(decision),
             )
-    flow_result = handle_flows(data=data, st=st, sid=sid, q=q, client_id=client_id, txt=TXT, service_payload=_service_payload, get_last_content_ui_payload=_get_last_content_ui_payload_compat, get_topic_state=get_topic_state)
+    flow_result = handle_flows(data=data, st=st, sid=sid, q=q, client_id=client_id, txt=_client_txt(client_id), service_payload=_service_payload, get_last_content_ui_payload=_get_last_content_ui_payload_compat, get_topic_state=get_topic_state)
     if flow_result is not None:
         return _lead_flow_orchestration_result(
             q=q, sid=sid, client_id=client_id, flow_result=flow_result, decision=decision
@@ -1201,7 +1152,7 @@ def _orchestrate_ask_turn(data: dict):
             sid=sid,
             q=q,
             client_id=client_id,
-            txt=TXT,
+            txt=_client_txt(client_id),
             service_payload=_service_payload,
         )
         if flow_result is not None:
@@ -1227,7 +1178,7 @@ def _orchestrate_ask_turn(data: dict):
         if ch:
             return AskOrchestrationResult(kind='chunk', q=q, sid=sid, client_id=client_id, chosen_chunk=ch, llm_question=q or f'Информация из {ref}', log_event='Answer generated from ref', chunk_route='retrieval_chunk', decision_frame=_orch_decision_dump(decision))
     if not q:
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=empty_question_response(), service_doc_id=None, service_track_user=False, service_route='error', decision_frame=_orch_decision_dump(decision))
+        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=empty_question_response(client_id), service_doc_id=None, service_track_user=False, service_route='error', decision_frame=_orch_decision_dump(decision))
     if continuation_without_context(q, st):
         log_json(logger, 'continuation_no_context', sid=sid, client_id=client_id)
         return AskOrchestrationResult(
@@ -1647,7 +1598,7 @@ def _orchestrate_ask_turn(data: dict):
                     sid=sid,
                     q=q,
                     client_id=client_id,
-                    txt=TXT,
+                    txt=_client_txt(client_id),
                     service_payload=_service_payload,
                 )
                 if flow_result is not None:
@@ -1673,7 +1624,7 @@ def _orchestrate_ask_turn(data: dict):
         rmode = str((cands.retrieval or {}).get('mode') or '')
         if rmode == 'no_candidates':
             emit_bot_event(logger, 'retrieval_fallback', status='no_candidates', details={'reason': 'no_candidates', 'question_preview': (q or '')[:200], 'top_score': ((cands.retrieval or {}).get('debug_meta') or {}).get('top_score')})
-            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(), service_doc_id=None, service_track_user=True, service_route='retrieval_no_candidates', decision_frame=_orch_decision_dump(decision))
+            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(client_id), service_doc_id=None, service_track_user=True, service_route='retrieval_no_candidates', decision_frame=_orch_decision_dump(decision))
         if rmode == 'low_score':
             dmeta = cands.retrieval.get('debug_meta') or {} if isinstance(cands.retrieval, dict) else {}
             emit_bot_event(logger, 'retrieval_fallback', status='low_score', details={'reason': 'low_score', 'question_preview': (q or '')[:200], 'top_score': dmeta.get('top_score'), 'threshold': dmeta.get('threshold'), 'alias_score': dmeta.get('alias_score'), 'top_candidate': dmeta.get('top_candidate'), 'query_user_raw': (dmeta.get('query_user_raw') or '')[:200]})
@@ -1681,7 +1632,7 @@ def _orchestrate_ask_turn(data: dict):
             pls = low_score_response(sid, client_id)
             pls = _apply_response_policy_compat(pls, st_ls, q, topic_state={}, doc_meta={}, pre_doc_turn_count=None, session_id=sid, client_id=client_id)
             return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=pls, service_doc_id=None, service_track_user=True, service_route='low_score_fallback', decision_frame=_orch_decision_dump(decision))
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
+        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(client_id), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
     log_json(logger, 'Processing question', question=q[:100], question_length=len(q))
     effective_scope_topic = _apply_content_retrieval_scope_ctx(
         scope_topic_candidate,
@@ -1698,7 +1649,7 @@ def _orchestrate_ask_turn(data: dict):
     if mode == 'no_candidates':
         log_json(logger, 'No candidates found', question=q[:50])
         emit_bot_event(logger, 'retrieval_fallback', status='no_candidates', details={'reason': 'no_candidates', 'question_preview': (q or '')[:200], 'top_score': dmeta.get('top_score')})
-        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(), service_doc_id=None, service_track_user=True, service_route='retrieval_no_candidates', decision_frame=_orch_decision_dump(decision))
+        return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(client_id), service_doc_id=None, service_track_user=True, service_route='retrieval_no_candidates', decision_frame=_orch_decision_dump(decision))
     if mode == 'low_score':
         log_json(logger, 'low_score_fallback', **dmeta)
         emit_bot_event(logger, 'retrieval_fallback', status='low_score', details={'reason': 'low_score', 'question_preview': (q or '')[:200], 'top_score': dmeta.get('top_score'), 'threshold': dmeta.get('threshold'), 'alias_score': dmeta.get('alias_score'), 'top_candidate': dmeta.get('top_candidate'), 'query_user_raw': (dmeta.get('query_user_raw') or '')[:200]})
@@ -1711,14 +1662,14 @@ def _orchestrate_ask_turn(data: dict):
         if not isinstance(final_chunk, dict):
             log_json(logger, 'selection_invalid_chunk', debug_meta=dmeta)
             emit_bot_event(logger, 'retrieval_fallback', status='invalid_chunk', details={'reason': 'selection_invalid_chunk', 'question_preview': (q or '')[:200], 'debug_meta': dmeta})
-            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
+            return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(client_id), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
         if dmeta.get('selected_by') == 'alias':
             log_json(logger, 'alias_hit_selected', alias_score=dmeta.get('alias_score'), file=final_chunk.get('file'), h2_id=final_chunk.get('h2_id'), h3_id=final_chunk.get('h3_id'))
         _log_selection(q=q, chosen_chunk=final_chunk, chosen_score=final_chunk.get('_score'), original_top_score=dmeta.get('top_score'), rerank_applied=bool(selection.get('rerank_applied')))
         return AskOrchestrationResult(kind='chunk', q=q, sid=sid, client_id=client_id, chosen_chunk=final_chunk, llm_question=None, log_event='Answer generated', chunk_route='retrieval_chunk', decision_frame=_orch_decision_dump(decision))
     log_json(logger, 'selection_unknown_mode', mode=mode, debug_meta=dmeta)
     emit_bot_event(logger, 'retrieval_fallback', status='unknown_mode', details={'reason': 'selection_unknown_mode', 'mode': mode, 'question_preview': (q or '')[:200], 'debug_meta': dmeta})
-    return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
+    return AskOrchestrationResult(kind='service_reply', q=q, sid=sid, client_id=client_id, service_payload=no_candidates_response(client_id), service_doc_id=None, service_track_user=True, service_route='error', decision_frame=_orch_decision_dump(decision))
 
 
 def _dispatch_orchestration_json(orch_r: AskOrchestrationResult):
@@ -2093,6 +2044,17 @@ def api_media_proxy(video_key: str):
         status=getattr(upstream, "status", 200) or 200,
         headers=resp_headers,
     )
+
+
+@app.get("/api/widget-config")
+def api_widget_config():
+    client_id = resolve_client_id(request.args.get("client_id"))
+    if client_id is None:
+        return jsonify({"error": "unknown_client"}), 403
+    cfg = load_widget_config(client_id)
+    if not cfg:
+        return jsonify({"error": "widget_config_not_found"}), 404
+    return jsonify(cfg)
 
 
 @app.get("/static/<path:path>")

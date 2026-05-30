@@ -263,7 +263,10 @@ def generate_facts_card_answer(
         return None
     from core.consult_nudge import consult_nudge_prompt_addon
 
-    system = _FACTS_CARD_SYSTEM + consult_nudge_prompt_addon(consult_nudge)  # type: ignore[arg-type]
+    system = _FACTS_CARD_SYSTEM + consult_nudge_prompt_addon(
+        consult_nudge,  # type: ignore[arg-type]
+        client_id=client_id,
+    )
     facts_block = "\n".join(f"- {f}" for f in facts)
     q_line = f"Вопрос пациента: {user_question}\n\n" if user_question else ""
     user_msg = f"{q_line}Услуга: {title}\n\nФакты:\n{facts_block}"
@@ -340,7 +343,10 @@ RESPONSE_FORMAT = (
 def _consult_nudge_addon(meta: dict) -> str:
     from core.consult_nudge import consult_nudge_prompt_addon
 
-    return consult_nudge_prompt_addon(meta.get("consult_nudge"))
+    return consult_nudge_prompt_addon(
+        meta.get("consult_nudge"),
+        client_id=meta.get("client_id"),
+    )
 
 
 GENERATOR_SINGLE_SOURCE_RULE = (

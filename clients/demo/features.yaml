@@ -1,6 +1,4 @@
-# clients/demo/features.yaml — демо для artgents.ru (Phase M1 scaffold)
-# Runtime пока не читает этот файл; целевое подключение — Phase M3.
-
+# clients/demo/features.yaml — демо для artgents.ru
 leads:
   enabled: false
   mode: demo_stub
@@ -13,6 +11,15 @@ postgres_events:
 
 guide_router:
   enabled: false
+
+consult_nudge:
+  enabled: true
+
+situation:
+  enabled: true
+
+messaging:
+  free_consultation: true
 
 ingress:
   strict: true

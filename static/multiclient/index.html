@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multiclient — локальный стенд</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 640px;
+      margin: 48px auto;
+      padding: 0 20px;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.5rem; }
+    .cards { display: grid; gap: 12px; margin-top: 24px; }
+    a.card {
+      display: block;
+      padding: 16px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(0,0,0,.1);
+      text-decoration: none;
+      color: inherit;
+    }
+    a.card:hover { border-color: rgba(0,0,0,.25); }
+    a.card strong { display: block; font-size: 1.05rem; }
+    a.card span { color: #555; font-size: 0.95rem; }
+    .demo { border-left: 4px solid #6952e8; }
+    .cesi { border-left: 4px solid #0d9488; }
+    .nika { border-left: 4px solid #7c3aed; }
+    .admin { margin-top: 32px; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <h1>Локальный multiclient</h1>
+  <p>Выберите бота. Запустите сервер: <code>python app.py</code> (порт в <code>.env</code>, обычно 9001).</p>
+  <div class="cards">
+    <a class="card demo" href="demo.html"><strong>Демо</strong><span>Надежда · фиолетовый · заявки не уходят</span></a>
+    <a class="card cesi" href="cesi.html"><strong>ЦЭСИ</strong><span>Алина · бирюза · admin + PG</span></a>
+    <a class="card nika" href="nikadent.html"><strong>НикаДент</strong><span>Дарья · фиолет/оранж · admin + PG</span></a>
+  </div>
+  <p class="admin">Админка (если поднят Postgres): <a href="http://127.0.0.1:9100/?client_id=cesi">cesi</a> · <a href="http://127.0.0.1:9100/?client_id=nikadent">nikadent</a></p>
+</body>
+</html>

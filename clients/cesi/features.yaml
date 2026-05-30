@@ -12,5 +12,14 @@ postgres_events:
 guide_router:
   enabled: false
 
+consult_nudge:
+  enabled: true
+
+situation:
+  enabled: true
+
+messaging:
+  free_consultation: false
+
 ingress:
   strict: true

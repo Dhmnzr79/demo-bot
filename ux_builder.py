@@ -208,46 +208,25 @@ def normalize_policy_payload(payload: dict) -> dict:
     return payload
 
 
-def empty_question_response() -> dict:
-    return {
-        "answer": "Уточните вопрос.",
-        "quick_replies": [],
-        "cta": None,
-        "video": None,
-        "situation": {"show": False, "mode": "normal"},
-        "offer": None,
-        "meta": {"error": "empty_question"},
-    }
+def empty_question_response(client_id: str | None = None) -> dict:
+    from core.client_config_loader import load_ui_bundle, ui_menu_to_payload
+
+    ui = load_ui_bundle(client_id)
+    return ui_menu_to_payload(ui.empty_question, sid="", client_id=client_id, extra_meta={"error": "empty_question"})
 
 
-def no_candidates_response() -> dict:
-    return {
-        "answer": (
-            "Не нашла ответа на этот вопрос. Попробуйте спросить иначе — или запишитесь на консультацию, "
-            "там разберём."
-        ),
-        "quick_replies": [],
-        "cta": None,
-        "video": None,
-        "situation": {"show": False, "mode": "normal"},
-        "offer": None,
-        "meta": {"file": None},
-    }
+def no_candidates_response(client_id: str | None = None) -> dict:
+    from core.client_config_loader import load_ui_bundle, ui_menu_to_payload
+
+    ui = load_ui_bundle(client_id)
+    return ui_menu_to_payload(ui.no_candidates, sid="", client_id=client_id, extra_meta={"file": None})
 
 
-def offtopic_response() -> dict:
-    return {
-        "answer": (
-            "Я помогаю по вопросам клиники: услуги, цены, подготовка, сроки, запись и контакты. "
-            "Если хотите, подскажу по вашему вопросу в этом контексте."
-        ),
-        "quick_replies": [],
-        "cta": None,
-        "video": None,
-        "situation": {"show": False, "mode": "normal"},
-        "offer": None,
-        "meta": {"offtopic": True},
-    }
+def offtopic_response(client_id: str | None = None) -> dict:
+    from core.client_config_loader import load_ui_bundle, ui_menu_to_payload
+
+    ui = load_ui_bundle(client_id)
+    return ui_menu_to_payload(ui.offtopic, sid="", client_id=client_id, extra_meta={"offtopic": True})
 
 
 def reset_session_response(sid: str) -> dict:
@@ -276,27 +255,23 @@ def internal_error_response() -> dict:
 
 def low_score_response(sid: str, client_id: str | None = None) -> dict:
     """Fallback при top similarity < порога; CTA из конфига (policy не снимает low_score)."""
-    meta_out: dict = {
-        "low_score": True,
-        "sid": sid,
-        "score": None,
-        "followups": [],
-        "file": None,
-    }
-    if client_id is not None:
-        meta_out["client_id"] = client_id
-    return {
-        "answer": (
-            "Не нашла точного ответа. Запишитесь на консультацию, она у нас бесплатная, "
-            "цена фиксируется в договоре без скрытых доплат, возможен налоговый вычет 13%."
-        ),
-        "quick_replies": [],
-        "cta": default_cta_dict(),
-        "video": None,
-        "situation": {"show": False, "mode": "normal"},
-        "offer": None,
-        "meta": meta_out,
-    }
+    from core.client_config_loader import load_ui_bundle, ui_menu_to_payload
+
+    ui = load_ui_bundle(client_id)
+    payload = ui_menu_to_payload(
+        ui.low_score,
+        sid=sid,
+        client_id=client_id,
+        extra_meta={
+            "low_score": True,
+            "score": None,
+            "followups": [],
+            "file": None,
+        },
+    )
+    if payload.get("cta") is None:
+        payload["cta"] = default_cta_dict()
+    return payload
 
 
 def _suggest_refs_at_most_one(service: dict | None) -> list:

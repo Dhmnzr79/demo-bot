@@ -1,0 +1,52 @@
+# clients/nikadent/ui.yaml
+guided_menu:
+  answer: "Могу подсказать по услугам НикаДент — что для вас важнее?"
+  quick_replies:
+    - label: "Стоимость имплантации"
+      ref: "implantation__pricing__implants.md#korotko"
+    - label: "Какие врачи работают?"
+      ref: "doctors__doctor__overview.md#korotko"
+    - label: "Как записаться?"
+      ref: "lead:booking"
+
+continuation_clarify:
+  answer: "Могу подсказать по услугам, ценам, врачам или записи в НикаДент. Что вас интересует?"
+
+fallback_menu:
+  low_score:
+    answer: >-
+      Не нашла точного ответа по базе клиники. Уточните вопрос
+      или запишитесь на консультацию — администратор свяжется с вами.
+    quick_replies:
+      - label: "Услуги"
+        ref: "implantation__service__classic.md#korotko"
+      - label: "Цены"
+        ref: "implantation__pricing__implants.md#korotko"
+      - label: "Записаться"
+        ref: "lead:booking"
+  no_candidates:
+    answer: >-
+      Не нашла точного ответа. Можно уточнить вопрос или записаться на консультацию.
+    quick_replies:
+      - label: "Посмотреть цены"
+        ref: "clinic__info__payment_terms.md#korotko"
+      - label: "Записаться"
+        ref: "lead:booking"
+  offtopic:
+    answer: >-
+      Я консультант НикаДент: помогаю по услугам, ценам, врачам и записи.
+      Задайте вопрос по стоматологии в рамках нашей клиники.
+  empty_question:
+    answer: "Уточните, пожалуйста, ваш вопрос."
+  bare_affirmative:
+    answer: "Напишите ваш вопрос — так будет проще подсказать."
+
+consult_nudge:
+  exhausted_prompt: |
+    Задача на этот ответ:
+    Тема для справочного ответа исчерпана.
+    Заверши ответ естественно: мягко предложи консультацию в клинике как следующий шаг (своими словами, без давления).
+  streak_prompt: |
+    Задача на этот ответ:
+    Пациент уже несколько раз уточнял по теме клиники.
+    Сначала ответь по существу, затем мягко предложи консультацию в НикаДент (без шаблонных фраз).

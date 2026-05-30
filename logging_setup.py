@@ -161,9 +161,12 @@ def emit_bot_event(
     row["details"] = dict(details or {})
     safe_row = _sanitize(row)
     try:
+        from core.client_config_loader import postgres_events_enabled
         from pg_sink import enqueue_bot_event
 
-        enqueue_bot_event(safe_row)
+        cid = safe_row.get("client_id")
+        if postgres_events_enabled(cid):
+            enqueue_bot_event(safe_row)
     except Exception:
         pass
     logger.info("bot_event", extra={"extra_data": safe_row})

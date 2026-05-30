@@ -22,6 +22,7 @@ from session import (
     set_situation_pending,
     update_profile,
 )
+from core.client_config_loader import situation_enabled
 from dialog_offer import parse_lead_offer_no, parse_lead_offer_yes
 
 _LEAD_NAME_CONFIRM_YES = "lead:name_confirm:yes"
@@ -461,6 +462,8 @@ def handle_flows(
         }
 
     if data.get("situation_action") == "start" or data.get("action") == "situation":
+        if not situation_enabled(client_id):
+            return None
         set_situation_pending(sid, True)
         return {
             "payload": service_payload(

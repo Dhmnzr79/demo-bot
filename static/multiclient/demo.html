@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Демо-бот</title>
+  <link rel="stylesheet" href="../widget/widget.css">
+  <style>
+    .page-host { min-height: 100vh; padding: 20px; font-family: system-ui, sans-serif; }
+    .page-host a { color: inherit; }
+    .err { color: #b00020; }
+  </style>
+</head>
+<body>
+  <main class="page-host">
+    <p><a href="index.html">← Все боты</a></p>
+    <p id="status">Загрузка…</p>
+  </main>
+  <script type="module">
+    import { mountWidget } from "../widget/widget.js";
+    const CLIENT_ID = "demo";
+    const statusEl = document.getElementById("status");
+    try {
+      const resp = await fetch(`/api/widget-config?client_id=${encodeURIComponent(CLIENT_ID)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const config = await resp.json();
+      config.apiBase = "";
+      statusEl.remove();
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      mountWidget(mount, config);
+    } catch (e) {
+      statusEl.className = "err";
+      statusEl.textContent = `Ошибка загрузки: ${e.message || e}`;
+    }
+  </script>
+</body>
+</html>

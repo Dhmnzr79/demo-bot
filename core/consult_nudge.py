@@ -95,8 +95,13 @@ def plan_consult_nudge(
     route: str | None,
     *,
     topic_exhausted: bool,
+    client_id: str | None = None,
 ) -> ConsultNudgeKind | None:
     """До генерации: нужно ли попросить LLM завершить ответ приглашением на консультацию."""
+    from core.client_config_loader import consult_nudge_enabled
+
+    if not consult_nudge_enabled(client_id):
+        return None
     if not is_substantive_content_route(route):
         return None
     if topic_exhausted:
@@ -139,23 +144,25 @@ def reset_consult_nudge_on_route(route: str | None, session_id: str) -> None:
         reset_consult_streak(session_id)
 
 
-def consult_nudge_prompt_addon(kind: ConsultNudgeKind | None) -> str:
+def consult_nudge_prompt_addon(
+    kind: ConsultNudgeKind | None,
+    *,
+    client_id: str | None = None,
+) -> str:
     """Инструкция для LLM (не готовый текст для пациента)."""
+    if kind is None:
+        return ""
+    from core.client_config_loader import consult_nudge_enabled, load_ui_bundle
+
+    if not consult_nudge_enabled(client_id):
+        return ""
+    ui = load_ui_bundle(client_id)
     if kind == "exhausted":
-        return (
-            "\n\nЗадача на этот ответ:\n"
-            "После ответа по вопросу пациенту по этой теме в базе больше нечего добавить — "
-            "тема для справочного ответа исчерпана.\n"
-            "Заверши ответ естественно: мягко предложи бесплатную консультацию в клинике "
-            "как следующий шаг (своими словами, в том же тоне, без давления).\n"
-            "Не предлагай текстом «могу ещё рассказать» — только консультацию, если уместно завершить диалог."
-        )
-    if kind == "streak":
-        return (
-            "\n\nЗадача на этот ответ:\n"
-            "Пациент уже несколько раз уточнял по теме клиники.\n"
-            "Сначала ответь по существу на вопрос, затем в конце того же ответа "
-            "мягко предложи бесплатную консультацию, чтобы разобрать детали лично "
-            "(своими словами, без шаблонных фраз и без давления)."
-        )
-    return ""
+        prompt = ui.consult_nudge_exhausted
+    elif kind == "streak":
+        prompt = ui.consult_nudge_streak
+    else:
+        return ""
+    if not prompt.strip():
+        return ""
+    return "\n\n" + prompt.strip()
