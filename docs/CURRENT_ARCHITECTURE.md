@@ -1,71 +1,45 @@
 # Текущая архитектура бота
 
-**Статус:** снимок **фактического** runtime (до полного multiclient §4.1).  
-**Целевое состояние:** `MULTICLIENT.md`.  
-**Обновлено:** docs cleanup + multiclient (2026).
+**Статус:** фактический runtime (multiclient M1–M4 локально).  
+**Целевое / ops:** `MULTICLIENT.md`.  
+**Обновлено:** 2026-05.
 
 ---
 
-## 0. Multiclient — что уже есть / чего нет
+## 0. Multiclient
 
-| Есть в коде | Ещё не сделано |
-|-------------|----------------|
-| `client_id` в API, `ALLOWED_CLIENTS`, Host→client (prod) | Origin: домены сайтов клиник в `allowed_origins` |
-| `clients/{id}/md/`, catalog, prices per pack | Prod-контент cesi/nikadent |
-| `core/client_data_loader` → `data/{id}/` corpus/embeddings | VPS deploy (M5) |
-| `session.py` → `data/{id}/bot.db` | |
-| `doctors_lookup` → `clients/{id}/md/` | |
-| `pg_sink` + `admin_dashboard/` | |
+| Реализовано | Ещё не prod |
+|-------------|-------------|
+| `clients/{id}/` — md, catalog, prices, policies, tone, features | Контент nikadent / финализация cesi |
+| `data/{id}/` — corpus, embeddings, aliases, `bot.db` | VPS deploy (Caddy, wildcard TLS) |
+| `core/client_runtime.py`, `client_data_loader.py` | `allowed_origins` — домены сайтов клиник |
+| `meta_loader`, `doctors_lookup` → только pack md | Golden evals per `client_id` |
+| Host → `client_id` (prod `*.bot.*`) | |
 | Origin guard (`core/origin_guard.py`) | |
+| Per-client system prompt (`core/llm_system_prompt.py`) | |
+| Leads: demo stub / email (`lead_service`, `lead_config.yaml`) | |
+| Admin + PG (`admin_dashboard/`, `pg_sink.py`) | |
+| Legacy `md/`, `clients/default/`, общий `data/corpus.jsonl` | **удалены** |
 
-**Сейчас:** изоляция по client pack + per-client SQLite/corpus. Корневой `md/`, `clients/default/`, общий `data/corpus.jsonl` — **удалены**.
-
----
-
-## 1. Цель версии
-
-- RAG-бот: цены, врачи, контакты, catalog, retrieval.
-- Переход к **demo + cesi + nikadent** как изолированным пакетам (`MULTICLIENT.md`).
-- `/ask`, `/ask/stream`, `/lead` (demo: lead stub).
+API: `client_id` в body/query; alias `default` → pack `demo`. `DEFAULT_CLIENT_ID=demo`.
 
 ---
 
-## 2. HTTP-роуты
+## 1. HTTP-роуты
 
 | Роут | Назначение |
 |------|------------|
 | `POST /ask` | Основной диалог |
 | `POST /ask/stream` | SSE |
-| `POST /lead` | Лид (demo: `demo_stub`) |
-| `GET /dashboard` | JSONL mini-dashboard |
+| `POST /lead` | Заявка (режим из `features.yaml`) |
+| `GET /api/widget-config` | Конфиг embed |
+| `GET /dashboard` | JSONL mini-dashboard (prod: 404) |
 
 Debug: `/_debug/ping`, `/__debug/retrieval` — prod: 404 или token.
 
 ---
 
-## 3. Модули
-
-| Модуль | Роль |
-|--------|------|
-| `app.py` | HTTP, `_orchestrate_ask_turn` |
-| `ingress_gate.py` | Noise/offtopic до Resolver |
-| `flow_handlers.py` | Lead, situation, booking, «да» |
-| `resolver.py` | `DecisionFrame` + safety-net |
-| `source_routing.py` | A3: doctor, catalog, price |
-| `doctors_lookup.py` | Врачи из `clients/{id}/md/` |
-| `query_selector.py` / `retriever.py` | RAG + rerank |
-| `arbiter.py` / `content_arbiter.py` | Выбор ref |
-| `chunk_responder.py` | Chunk → LLM → policy |
-| `verifier.py` | Shadow/trigger verify |
-| `session.py` | SQLite per client (`data/{id}/bot.db`) |
-| `pg_sink.py` | Async PG events |
-| `admin_dashboard/` | Read-only admin UI |
-| `lead_service.py` | Email + PG (`lead_config.yaml`, `.env` SMTP) |
-| `contracts/`, `core/routing.yaml` | Схемы, пороги |
-
----
-
-## 4. Пайплайн `/ask` (упрощённо)
+## 2. Пайплайн `/ask`
 
 ```
 ingress / rate limit → flow_handlers → ref / continuation
@@ -74,43 +48,67 @@ ingress / rate limit → flow_handlers → ref / continuation
 → chunk_responder → policy → session → JSON
 ```
 
-Детали: `ROUTING_MAP.md`.
+Детали маршрутов: `ROUTING_MAP.md`.
 
 ---
 
-## 5. Resolver
+## 3. Модули
 
-- Legacy: `classify_intent` → contacts | price_* | content
-- Resolver: `DecisionFrame`; bypass: env **`RESOLVER_OFF=1`**
+| Модуль | Роль |
+|--------|------|
+| `app.py` | HTTP, `_orchestrate_ask_turn` |
+| `core/client_host.py` | Host → `client_id` (prod) |
+| `core/origin_guard.py` | Origin/Referer vs `allowed_origins` |
+| `core/startup_check.py` | Старт: артефакты `data/{id}/` |
+| `ingress_gate.py` | Noise/offtopic до Resolver |
+| `flow_handlers.py` | Lead, situation, booking, «да» |
+| `resolver.py` | `DecisionFrame` + safety-net |
+| `source_routing.py` | A3: doctor, catalog, price |
+| `doctors_lookup.py` | Врачи из `clients/{id}/md/` |
+| `query_selector.py` / `retriever.py` | RAG + rerank |
+| `arbiter.py` / `content_arbiter.py` | Выбор ref |
+| `chunk_responder.py` | Chunk → LLM → policy |
+| `session.py` | SQLite `data/{id}/bot.db` |
+| `lead_service.py` | Email + PG |
+| `pg_sink.py` | Async PG events |
+| `admin_dashboard/` | Read-only admin UI |
+| `contracts/`, `core/routing.yaml` | Схемы, пороги |
+
+Legacy (не расширять): `llm.classify_intent`, `query_selector.select_catalog_content_route` — см. `DEPRECATED.md`.
+
+---
+
+## 4. Resolver
+
+- Основной путь: `resolver.resolve()` → `DecisionFrame`
+- Bypass: env **`RESOLVER_OFF=1`** → `classify_intent`
 - Contacts: regex overlay поверх Resolver
 
 ---
 
-## 6. Контент
+## 5. Контент и индекс
 
-- MD: **`clients/{id}/md/`**
-- Catalog/prices: **`clients/{id}/`**
-- Индекс: **`data/{id}/corpus.jsonl`**, **`data/{id}/embeddings.npy`**
+| Что | Где |
+|-----|-----|
+| MD | `clients/{id}/md/` |
+| Catalog, prices, policies | `clients/{id}/` |
+| Индекс | `data/{id}/corpus.jsonl`, `embeddings.npy`, `alias_*` |
+| Пересборка | `python build_index.py --client {id\|all}` |
 
 ---
 
-## 7. Observability
+## 6. Observability
 
 - JSONL + `emit_bot_event` → optional PG (`BOT_PG_DSN`)
-- Боевая админка: **`DASHBOARD.md`**, `admin.bot.artgents.ru`
-- Demo: PG не обязателен
+- Боевая админка: `DASHBOARD.md`, `admin.bot.artgents.ru`
+- Demo: PG не обязателен (`features.yaml`)
 
 ---
 
-## 8. Виджет
+## 7. Виджет
 
-`WIDGET_ANSWER_FORMAT.md`
+Контракт ответа: `WIDGET_ANSWER_FORMAT.md`. Конфиг: `clients/{id}/widget_config.json`.
 
 ---
 
-## 9. Намеренно после multiclient M5+
-
-- `guide_router`, `dialog_manager` (ROADMAP Phase 4–5)
-- n8n / Redis (ROADMAP Phase 6)
-
-При расхождении док ↔ код: **этот файл + `MULTICLIENT.md` + код**.
+При расхождении док ↔ код: **этот файл + код**; ops/domains — `MULTICLIENT.md`.

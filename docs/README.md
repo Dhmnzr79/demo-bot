@@ -1,39 +1,26 @@
-# Документация проекта
+# Документация
 
-**Два слоя:** как работает код **сейчас** и куда идём **дальше**. Исторический архив V5 удалён из репо (копия у владельца).
+| Документ | Зачем |
+|----------|--------|
+| **`CURRENT_ARCHITECTURE.md`** | Как бот работает **сейчас** (runtime, модули, пайплайн) |
+| **`MULTICLIENT.md`** | Client pack, домены, VPS, локальный запуск, prod-критерии |
+| **`ROUTING_MAP.md`** | Куда уходит вопрос (маршруты до retrieval) |
+| **`WIDGET_ANSWER_FORMAT.md`** | Контракт текста ответа для виджета |
+| **`DASHBOARD.md`** | Admin, Postgres, события, cost |
+| **`TECH_DEBT.md`** | Открытый долг и следующие шаги |
 
-| Слой | Файлы |
-|------|--------|
-| **План multiclient** | `MULTICLIENT.md` ← главный вектор |
-| **Runtime сейчас** | `CURRENT_ARCHITECTURE.md` |
-| **Дашборд / PG / admin** | `DASHBOARD.md` |
-| **Общая очередность** | `ROADMAP.md` |
-| **Долг** | `TECH_DEBT.md` |
+Корень репо: `DEPRECATED.md`, `contracts/`, `core/routing.yaml`.
 
-Если код расходится с `CURRENT_ARCHITECTURE.md` — правим код **или** документ в том же PR.
-
----
-
-## Обязательно читать (Cursor)
-
-1. `README.md` (этот файл)
-2. **`MULTICLIENT.md`** — изоляция demo / cesi / nikadent, M0–M6
-3. `CURRENT_ARCHITECTURE.md` — фактический runtime до закрытия §4.1 MULTICLIENT
-4. `ROADMAP.md`
-5. `TECH_DEBT.md`
-6. `DEPRECATED.md` (корень), `contracts/`, `core/routing.yaml`
+**Правило:** код и `CURRENT_ARCHITECTURE.md` не расходятся — правим вместе в одном PR.
 
 ---
 
-## По задаче
+## Cursor (обязательно)
 
-| Задача | Документ |
-|--------|----------|
-| Multiclient, VPS, client pack | **`MULTICLIENT.md`** |
-| Админка, Postgres, события | **`DASHBOARD.md`** |
-| Маршрутизация | `ROUTING_MAP.md` |
-| Виджет, стриминг, JSON ответа | `WIDGET_ANSWER_FORMAT.md` |
-| Тон, UX, продукт | `PRODUCT_PRINCIPLES.md` |
+1. `README.md` → `CURRENT_ARCHITECTURE.md` → `MULTICLIENT.md` → `TECH_DEBT.md`
+2. Задача по UI: `WIDGET_ANSWER_FORMAT.md`
+3. Задача по admin/PG: `DASHBOARD.md`
+4. Задача по маршрутам: `ROUTING_MAP.md`
 
 ---
 

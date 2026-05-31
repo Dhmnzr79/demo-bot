@@ -1,8 +1,8 @@
 # Мультиклиентность — план внедрения
 
-**Статус:** принятое архитектурное решение (канон для Phase M1+).  
-**Аудитория:** владелец продукта + разработка + Cursor.  
-**Связанные документы:** `CURRENT_ARCHITECTURE.md`, `DASHBOARD.md`, `ROADMAP.md`.
+**Статус:** канон multiclient (реализовано локально M1–M4; prod — M5).  
+**Runtime:** `CURRENT_ARCHITECTURE.md`.  
+**Долг:** `TECH_DEBT.md`.
 
 ---
 
@@ -27,7 +27,7 @@ Demo, ЦЭСИ, НикаДент и следующие клиники — **не
 7. **Заявки, админка, guide-router, demo-режим** — через конфиг клиента (`features.yaml`, `lead_config.yaml`), не через `if client_id == ...` в коде.
 8. **Секреты** (OpenAI, SMTP, пароли админки) — только в `.env` на сервере, не в git.
 
-**Один bot-процесс + несколько клиентов — возможно только с client-aware runtime.** Сейчас в коде один `SQLITE_PATH` и один `DATA_DIR` на процесс. Пока слой ниже не сделан, «папки `data/cesi/` и `data/demo/`» — только целевая структура, не факт изоляции. См. §4.1.
+Изоляция в коде: `core/client_runtime.py`, `core/client_data_loader.py`, client-aware `session.py` — см. `CURRENT_ARCHITECTURE.md`.
 
 ---
 
@@ -101,42 +101,28 @@ data/
 | `video_catalog.yaml` | Ключи видео для виджета |
 | `widget_config.json` | Приветствие, teaser, **`allowed_origins`** (whitelist для проверки на сервере) |
 | `brand.yaml` | Палитра виджета, лого URL |
-| `tone.yaml` | Системный промпт, тексты записи/ситуации (сейчас часть в `app.py`) |
+| `tone.yaml` | Системный промпт, тексты lead/situation |
 | `features.yaml` | `leads: false`, `admin: false`, `guide_router: false`, … |
 | `lead_config.yaml` | Режим доставки, email получателей, webhook URL (позже) |
 
-**Врачи:** только в `clients/{client_id}/md/` (файлы `doctors__*.md`), без отдельного `doctors.json`.  
-**Сейчас в коде:** `doctors_lookup.py` читает корневой `md/` — главный риск смешивания; перенос в M1 (§4.1).
+**Врачи:** только в `clients/{client_id}/md/` (файлы `doctors__*.md`), без отдельного `doctors.json`.
 
-### 4.1. Client-aware runtime (обязательный слой кода)
+### 4.1. Client-aware runtime ✅
 
-Целевые папки `clients/{id}/` и `data/{id}/` **сами по себе не изолируют**. Сейчас на процесс один `DATA_DIR` и один `SQLITE_PATH` (`config.py`); retrieval фильтрует по `client_id` внутри **общего** corpus — этого недостаточно для «идеальной» разводки.
+Реализовано в коде:
 
-**Один bot-процесс + несколько клиентов возможен**, если перед orchestration есть слой, который по `client_id` выбирает все runtime-ресурсы:
+| Модуль | Поведение |
+|--------|-----------|
+| `core/client_runtime.py` | пути pack md, `data/{id}/`, sqlite |
+| `core/client_data_loader.py` | corpus, embeddings, alias_* per client |
+| `session.py` | `data/{id}/bot.db` |
+| `meta_loader.py` | только `clients/{id}/md/` |
+| `retriever.py` | loader текущего клиента |
+| `doctors_lookup.py` | `clients/{id}/md/doctors__*.md` |
+| `core/client_host.py` | Host `*.bot.*` → `client_id` (prod) |
+| `core/origin_guard.py` | Origin/Referer vs `allowed_origins` |
 
-| Модуль / задача | Сейчас | Целевое поведение |
-|-----------------|--------|-------------------|
-| **`core/client_runtime.py`** (новый) | нет | `resolve_client_paths(client_id)` → md root, data dir, sqlite path |
-| **`core/client_data_loader.py`** (новый) | один corpus/embeddings в `data/` | загрузка/кэш `corpus.jsonl`, `embeddings.npy`, `alias_*` из `data/{client_id}/` |
-| **`session.py`** | один `SQLITE_PATH` | `client_id` → `data/{client_id}/bot.db` (connection или path per request) |
-| **`meta_loader.py`** | `md/` + fallback default | только `clients/{client_id}/md/`, без корня |
-| **`retriever.py`** | общий индекс + filter | индекс только из `client_data_loader` для текущего клиента |
-| **`doctors_lookup.py`** | `_MD_BASE = md/` | `clients/{client_id}/md/doctors__*.md`, индекс per client |
-| **`app.py`** | Host/body `client_id` | Host поддомен → `client_id`; сверка с `ALLOWED_CLIENTS` |
-| **Origin guard** | нет | `/ask`, `/lead`: проверка `Origin`/`Referer` по `widget_config.allowed_origins` |
-
-Пока §4.1 не закрыт, критерий «можно в prod» (§11) **не выполнен**, даже если папки на диске уже разложены.
-
-### Что уходит из корня (legacy)
-
-| Сейчас | После миграции |
-|--------|----------------|
-| `md/*.md` | `clients/{id}/md/` |
-| `clients/default/*` | `clients/cesi/` или `clients/demo/` по смыслу |
-| `data/corpus.jsonl`, `data/embeddings.npy`, … | `data/{id}/…` |
-| `data/demo-bot.db` | `data/{id}/bot.db` |
-
-Корневой `md/` и `clients/default/` — **удалить после миграции**, не держать как fallback.
+Legacy удалён: корневой `md/`, `clients/default/`, общий `data/corpus.jsonl`.
 
 ---
 
@@ -174,7 +160,7 @@ postgres_events:
   enabled: true
 
 guide_router:
-  enabled: false             # включить после Phase 4 ROADMAP
+  enabled: false             # см. TECH_DEBT.md
 ```
 
 ---
@@ -286,67 +272,89 @@ admin.bot.artgents.ru
 
 ---
 
-## 10. Порядок работ
+## 10. Статус фаз
 
-### Phase M0 — Инвентаризация (1–2 дня)
+| Фаза | Статус | Комментарий |
+|------|--------|-------------|
+| **M0** | ✅ | инвентаризация (архив удалён) |
+| **M1** | ✅ | client packs, runtime paths, Host, Origin |
+| **M2** | ✅ | `data/{id}/`, loader, session, build_index |
+| **M3** | ✅ | features, lead_config, tone, demo vs бой |
+| **M4** | ✅ локально | Postgres + admin_dashboard |
+| **M5** | ⏳ | VPS, Caddy, prod smoke |
+| **M6** | ✅ | legacy удалён, docs sync |
 
-- [ ] Список всех md, json, yaml по demo / ЦЭСИ / старому бою
-- [ ] Что уходит в `clients/demo/`, что в `clients/cesi/`
-- [ ] SMTP и тексты заявок из старого боя (только справочно)
-- [ ] Зафиксировать `client_id` для третьей клиники, когда будет имя
+**После M5 (не блокер запуска):** routing cleanup (`ROUTING_MAP`), guide_router, webhook CRM — см. `TECH_DEBT.md`.
 
-### Phase M1 — Структура пакетов + client-aware runtime (код + файлы)
+---
 
-- [ ] Создать `clients/demo/`, `clients/cesi/`, `clients/nikadent/` (пустой каркас)
-- [ ] Перенести md и json из корня / `default/`
-- [ ] Добавить шаблоны: `features.yaml`, `lead_config.yaml`, `widget_config.json`, `tone.yaml`
-- [ ] **`core/client_runtime.py`:** `client_id` → пути `clients/{id}/md/`, `data/{id}/`
-- [ ] **`meta_loader.py`:** только `clients/{id}/md/`, убрать fallback на корневой `md/`
-- [ ] **`doctors_lookup.py`:** врачи только из `clients/{id}/md/doctors__*.md` (не `_MD_BASE = md/`)
-- [ ] Host поддомен → `client_id`; сверка body `client_id` с Host; `ALLOWED_CLIENTS` whitelist
-- [ ] **`widget_config.allowed_origins`:** проверка Origin/Referer на `/ask` и `/lead`
+## 10.1. Локальная разработка
 
-### Phase M2 — Индекс, data loader и сессии
+**Бот:** `python app.py` → `http://127.0.0.1:9001/static/multiclient/index.html` (порт из `.env`).
 
-- [ ] **`core/client_data_loader.py`:** по `client_id` грузить corpus, embeddings, alias_rows, alias_embeddings из `data/{id}/`
-- [ ] **`retriever.py`:** убрать зависимость от глобального `DATA_DIR`; только loader текущего клиента
-- [ ] CLI: `build_index --client-id cesi` → только `data/cesi/`
-- [ ] **`session.py`:** `client_id` → `data/{client_id}/bot.db` (не один глобальный `SQLITE_PATH`)
-- [ ] Удалить общий `data/corpus.jsonl` из runtime
-- [ ] Smoke: «ответ не содержит маркеров чужой клиники»; врач cesi не из md demo
+**Postgres + admin (cesi / nikadent):**
 
-### Phase M3 — Режимы demo vs бой
+```bash
+docker compose up -d postgres
+python admin_dashboard/app.py   # :9100
+```
 
-- [ ] `lead_service` читает `features.yaml` + `lead_config.yaml`
-- [ ] Demo: `demo_stub`; cesi: email + `enqueue_lead` в PG
-- [ ] Тексты lead из `tone.yaml`, убрать demo-строки из `app.py`
-- [ ] `features.yaml` → postgres on/off
+`.env`: `BOT_PG_DSN=postgresql://bot:bot@localhost:5432/bot_events`
 
-### Phase M4 — Админка + локалка
+**Индекс** (после правок md):
 
-- [ ] Postgres локально (docker)
-- [ ] `admin_dashboard` + `BOT_PG_DSN`
-- [ ] Проверка: диалоги cesi видны, demo — нет (или отдельный фильтр)
-- [ ] Поддомены на локалке (hosts file) или query `client_id` для отладки
+```bash
+python build_index.py --client all
+# или: python build_index.py --client cesi
+```
 
-### Phase M5 — Smoke и VPS
+**Заявки:** получатели в `clients/{id}/lead_config.yaml`; SMTP в `.env`. Demo — `leads.enabled: false`.
 
-- [ ] Golden 10–20 вопросов на клиента (цена, врач, контакты)
+**API alias:** `client_id=default` в запросе → pack `demo`.
+
+---
+
+## 10.2. Старый чеклист фаз (архив)
+
+<details>
+<summary>M0–M6 детальный список (исторический)</summary>
+
+### Phase M0 — Инвентаризация
+
+- [x] Список md, json, yaml по demo / cesi / nikadent
+- [x] Карта миграции demo / cesi / nikadent
+
+### Phase M1 — Структура + runtime
+
+- [x] `clients/{demo,cesi,nikadent}/`
+- [x] `core/client_runtime.py`, meta_loader, doctors_lookup
+- [x] Host → client_id; Origin guard
+
+### Phase M2 — Индекс и сессии
+
+- [x] `client_data_loader`, retriever, `build_index --client`
+- [x] `session.py` → `data/{id}/bot.db`
+- [x] Удалён общий `data/corpus.jsonl`
+
+### Phase M3 — Demo vs бой
+
+- [x] lead_service + features + lead_config + tone
+
+### Phase M4 — Админка
+
+- [x] Postgres локально, admin_dashboard
+
+### Phase M5 — Prod
+
 - [ ] Caddy + wildcard + HTTPS
-- [ ] Деплой bot + PG + admin
-- [ ] Мониторинг: bot отвечает, admin открывается, lead test на cesi
+- [ ] Деплой + smoke на VPS
 
-### Phase M6 — Docs и legacy
+### Phase M6 — Legacy
 
-- [x] Docs cleanup: `README`, `MULTICLIENT`, `CURRENT_ARCHITECTURE`, `DASHBOARD`; удалены `docs/archive/` и дубликаты в корне `docs/`
-- [ ] Обновить `CURRENT_ARCHITECTURE.md` после закрытия §4.1 в коде
-- [ ] Удалить корневой `md/`, `clients/default/` после cutover
+- [x] Удалены корневой `md/`, `clients/default/`
+- [x] Docs sync
 
-### После M5 (не блокирует запуск клиник)
-
-- Phase 2 ROADMAP: routing cleanup
-- Phase 4 ROADMAP: guide_router
-- n8n / Redis / CRM webhook — по `lead_config.yaml`
+</details>
 
 ---
 
@@ -357,9 +365,9 @@ admin.bot.artgents.ru
 3. Demo: заявка с телефоном → `demo_stub`, нет записи в `leads` PG.
 4. CESI: заявка → email и/или строка в PG, видна в admin.
 5. Admin: фильтр по `client_id`, HTTPS + token.
-6. Нет файлов в корневом `md/` и `clients/default/` в runtime.
-7. §4.1 закрыт: `client_data_loader`, client-aware `session.py`, `doctors_lookup` и `meta_loader` без корневого md.
-8. Запрос `/ask` с чужим `Origin` для `cesi` → отказ (если origin не в `allowed_origins`).
+6. Нет legacy-путей (`md/`, `clients/default/`, общий corpus) в репо и runtime.
+7. Client-aware loader, session, doctors, meta — без fallback на чужой pack.
+8. Запрос `/ask` с чужим `Origin` → отказ (prod, если origin не в `allowed_origins`).
 
 ---
 
@@ -389,14 +397,9 @@ admin.bot.artgents.ru
 
 ---
 
-## 14. Связь с ROADMAP
+## 14. Следующие шаги (код)
 
-| ROADMAP | MULTICLIENT |
-|---------|-------------|
-| Phase 1 Demo/Client Stabilization | **заменяется/углубляется Phase M1–M5** |
-| Phase 2 Routing Cleanup | после M5 |
-| Phase 4 Guide Layer | `features.yaml` per client |
-| Phase 6 Production Platform | PG уже в M4–M5; n8n позже |
+См. **`TECH_DEBT.md`**: VPS (M5), routing cleanup, guide_router, evals per client.
 
 ---
 

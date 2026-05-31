@@ -1,6 +1,6 @@
 # v5 per-layer evals
 
-Этот каталог содержит per-layer golden sets и smoke runner. Контекст: `docs/CURRENT_ARCHITECTURE.md`, multiclient: `docs/MULTICLIENT.md`, evals: `docs/ROADMAP.md`.
+Этот каталог содержит per-layer golden sets и smoke runner. Контекст: `docs/CURRENT_ARCHITECTURE.md`, `docs/MULTICLIENT.md`, долг: `docs/TECH_DEBT.md`.
 
 ## Файлы
 
@@ -22,7 +22,7 @@ python evals/v5/run_layer_eval.py --layer all
 ## E2E smoke (PR #E.0)
 
 Цель: минимальный end-to-end smoke runner, который дёргает `/ask` целиком и проверяет:
-- `meta.route` (если указан `expected_route`)
+- **inferred smoke route** — `_infer_route_from_response()` по `meta.orch_route`, `meta.ingress_route`, флагам и `meta.file` (см. `docs/ROUTING_MAP.md`; **не** `meta.route`)
 - `must_contain` — подстроки, которые **обязаны** быть в `answer` (case-insensitive)
 - `must_not_contain` — подстроки, которых **не должно** быть в `answer` (case-insensitive)
 

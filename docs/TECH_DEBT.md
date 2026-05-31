@@ -1,54 +1,46 @@
 # Tech Debt
 
-Активный долг. План работ: **`MULTICLIENT.md`**. Runtime: **`CURRENT_ARCHITECTURE.md`**.
+Открытый долг. Runtime: **`CURRENT_ARCHITECTURE.md`**. Ops / prod: **`MULTICLIENT.md`**.
 
 ---
 
-## Multiclient (блокер изоляции)
+## До prod (M5)
 
-| Проблема | Направление |
-|----------|-------------|
-| Корневой `md/` + `clients/default/` | ~~удалено~~ только `clients/{id}/` |
-| Один `DATA_DIR` / corpus | ~~done~~ `core/client_data_loader.py` → `data/{id}/` |
-| Один `SQLITE_PATH` | ~~done~~ `session.py` → `data/{id}/bot.db` |
-| `doctors_lookup` → корневой `md/` | ~~done~~ `clients/{id}/md/` |
-| Нет Origin guard на `/ask` | ~~M1~~ `core/origin_guard.py`; prod: `origin_required` без Origin/Referer |
-| Lead stub hardcoded | ~~M3~~ email + `lead_config.yaml` (`core/lead_email.py`) |
-| Legacy `_startup_check` → `data/` | ~~done~~ `core/startup_check.py` per `data/{id}/` |
-| `BASE_SYSTEM` / «бесплатная» в коде | ~~done~~ `core/llm_system_prompt.py` + `features.messaging.free_consultation` |
-| Host → `client_id` | ~~done~~ `core/client_host.py` (prod: поддомен `*.bot.*`) |
-| Legacy `/dashboard` в prod | ~~done~~ 404; использовать `admin_dashboard/` |
-
-**Контент перед prod (ещё вручную):** `demo_video.mp4` в `video_catalog.yaml`; `allowed_origins` — домены сайтов клиник; персонализация `starterPrompts`.
-
+| Задача | Примечание |
+|--------|------------|
+| VPS + Caddy + wildcard `*.bot.artgents.ru` | один bot-сервис |
+| Smoke 10–20 вопросов на клиента | цена, врач, контакты, lead |
+| `allowed_origins` — реальные домены сайтов клиник | не только bot-поддомены |
+| Контент nikadent / финализация cesi | `NOT_PROD.md` в pack |
+| `demo_video.mp4` в demo `video_catalog.yaml` | placeholder |
 
 ---
 
 ## Runtime / код
 
-| Проблема | Направление |
-|----------|-------------|
-| `app.py` большой | Routing cleanup после M5 |
-| Legacy `classify_intent` + Resolver | evals → свести |
-| `enqueue_lead` не вызывается | ~~M3~~ PG + email в `lead_service` |
-| Нет `pending_followup_ref` | Guide phase |
-
----
-
-## Качество
-
-| Проблема | Направление |
-|----------|-------------|
-| Нет golden routing per client | Phase evals после M5 |
-| Evals частично (`evals/v5/`) | расширить по `client_id` |
+| Задача | Направление | Phase |
+|--------|-------------|-------|
+| Карта маршрутов | `docs/ROUTING_MAP.md` | **2 ✓** |
+| `app.py` большой | вынести `orchestration/` | **3** |
+| Smoke на маршруты + legacy cleanup | evals + таблица legacy в ROUTING_MAP | **3** |
+| Smoke runner ↔ orch_route (полное покрытие service_route) | `run_e2e_smoke._infer_route_from_response` | **3** |
+| Legacy `classify_intent` + Resolver | evals → свести к Resolver | **3** |
+| Golden routing per `client_id` | `evals/v5/` | **3** |
+| `pending_followup_ref` / guide_router | после стабильного routing | **4** |
 
 ---
 
 ## Observability
 
-| Проблема | Направление |
-|----------|-------------|
-| Admin требует PG — demo без | `features.yaml` |
-| JSONL + PG параллельно | норма, см. `DASHBOARD.md` |
+| Задача | Направление |
+|--------|-------------|
+| Admin без PG для demo | норма (`features.yaml`) |
+| JSONL + PG параллельно | см. `DASHBOARD.md` |
 
-При закрытии — удалить строку из таблицы в PR.
+---
+
+## Закрыто (не возвращать)
+
+Multiclient M1–M4 локально: client packs, `data/{id}/`, `client_data_loader`, per-client session/SQLite, Host+Origin, leads email, admin token, legacy `md/` + `clients/default/` удалены.
+
+При закрытии новой задачи — удалить строку из таблицы в PR.

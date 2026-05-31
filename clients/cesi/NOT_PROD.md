@@ -17,4 +17,4 @@
 4. `widget_config.json` — `allowed_origins` сайта клиники.
 5. Smoke 5–10 вопросов на стенде cesi.
 
-См. также `docs/MIGRATION_INVENTORY.md`.
+См. `docs/MULTICLIENT.md` §15 и `docs/TECH_DEBT.md`.
