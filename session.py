@@ -9,7 +9,9 @@ import uuid
 from collections import deque
 from datetime import datetime
 
-from config import DATA_DIR, MAX_IDLE_SEC, MAX_TURNS, SQLITE_PATH
+from config import MAX_IDLE_SEC, MAX_TURNS
+from core.client_config_loader import resolve_pack_client_id
+from core.client_runtime import sqlite_path_for_client
 
 PHONE_RX = re.compile(r"(?:\+7|8)?[\s\-()]?\d{3}[\s\-()]?\d{3}[\s\-()]?\d{2}[\s\-()]?\d{2}")
 YES_RX = re.compile(
@@ -21,19 +23,31 @@ YES_RX = re.compile(
 )
 
 _lock = threading.RLock()
-_conn: sqlite3.Connection | None = None
+_conns: dict[str, sqlite3.Connection] = {}
+_tls = threading.local()
+
+
+def bind_session_client(client_id: str | None) -> None:
+    """Thread-local client pack for SQLite path (set before mem_get)."""
+    _tls.client_id = resolve_pack_client_id(client_id)
+
+
+def _session_pack_id() -> str:
+    return getattr(_tls, "client_id", None) or "demo"
 
 
 def _connect() -> sqlite3.Connection:
-    global _conn
+    pack = _session_pack_id()
     with _lock:
-        if _conn is None:
-            os.makedirs(DATA_DIR, exist_ok=True)
-            _conn = sqlite3.connect(
-                SQLITE_PATH, check_same_thread=False, isolation_level=None
+        conn = _conns.get(pack)
+        if conn is None:
+            db_path = sqlite_path_for_client(pack)
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            conn = sqlite3.connect(
+                db_path, check_same_thread=False, isolation_level=None
             )
-            _conn.execute("PRAGMA journal_mode=WAL")
-            _conn.execute(
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS sessions (
                     sid TEXT PRIMARY KEY,
@@ -42,7 +56,8 @@ def _connect() -> sqlite3.Connection:
                 )
                 """
             )
-        return _conn
+            _conns[pack] = conn
+        return conn
 
 
 def _fresh_defaults() -> dict:
@@ -105,10 +120,11 @@ def _now() -> float:
 
 
 def bind_client_id(session_id: str, client_id: str | None) -> None:
-    """Фиксируем client_id в SQLite-сессии (дашборд / мультиклиент позже)."""
+    """Фиксируем client_id в SQLite-сессии (дашборд / мультиклиент)."""
     cid = (client_id or "").strip()
     if not cid:
         return
+    bind_session_client(cid)
     with _lock:
         st = mem_get(session_id)
         if st.get("client_id") == cid:

@@ -59,7 +59,7 @@ Debug: `/_debug/ping`, `/__debug/retrieval` — prod: 404 или token.
 | `session.py` | SQLite (**один файл на процесс**) |
 | `pg_sink.py` | Async PG events |
 | `admin_dashboard/` | Read-only admin UI |
-| `lead_service.py` | Demo stub |
+| `lead_service.py` | Email + PG (`lead_config.yaml`, `.env` SMTP) |
 | `contracts/`, `core/routing.yaml` | Схемы, пороги |
 
 ---

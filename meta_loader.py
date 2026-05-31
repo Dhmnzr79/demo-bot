@@ -1,11 +1,16 @@
-# meta_loader.py
-from os.path import abspath, basename
-import os, re, yaml
+# meta_loader.py — doc frontmatter from client packs (M2)
+from __future__ import annotations
 
-from config import DEFAULT_CLIENT_ID
+import os
+import re
+from os.path import abspath
 
-# front-matter между --- ... ---
-_FM_RE = re.compile(r'^---\s*\n(.*?)\n---\s*\n?', re.S)
+import yaml
+
+from core.client_config_loader import resolve_pack_client_id
+from core.client_runtime import client_md_dir
+
+_FM_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.S)
 
 
 def _safe_int(value, default: int = 0) -> int:
@@ -14,10 +19,11 @@ def _safe_int(value, default: int = 0) -> int:
     except (TypeError, ValueError):
         return default
 
+
 def _read_file(path: str) -> str:
-    # utf-8-sig: strips UTF-8 BOM so ^--- frontmatter regex and YAML match the file start.
     with open(path, "r", encoding="utf-8-sig") as f:
         return f.read()
+
 
 def _parse_front_matter(text: str) -> dict:
     m = _FM_RE.match(text)
@@ -31,86 +37,74 @@ def _parse_front_matter(text: str) -> dict:
     except Exception:
         return {}
 
-def load_doc_meta(md_root: str = "md") -> dict:
-    meta = {}
+
+def _meta_item(pack_id: str, name: str, fm: dict) -> dict:
+    return {
+        "client_id": pack_id,
+        "doc_id": fm.get("doc_id"),
+        "doc_type": fm.get("doc_type"),
+        "subtype": fm.get("subtype"),
+        "topic": fm.get("topic"),
+        "subtopic": fm.get("subtopic"),
+        "cta_text": fm.get("cta_text"),
+        "cta_action": fm.get("cta_action"),
+        "cta_from_turn": _safe_int(fm.get("cta_from_turn", 0), 0),
+        "verbatim_ids": fm.get("verbatim_ids") or [],
+        "aliases": fm.get("aliases") or [],
+        "suggest_h3": fm.get("suggest_h3") or [],
+        "suggest_refs": fm.get("suggest_refs") or [],
+        "situation_allowed": bool(fm.get("situation_allowed", False)),
+        "video_key": fm.get("video_key"),
+        "empathy_enabled": bool(fm.get("empathy_enabled", False)),
+        "empathy_tag": fm.get("empathy_tag"),
+    }
+
+
+def load_doc_meta_for_pack(pack_id: str) -> tuple[dict, dict]:
+    """Return (meta_by_name, paths_by_name) for one client pack."""
+    meta: dict = {}
+    paths: dict = {}
+    md_root = client_md_dir(pack_id)
+    if not os.path.isdir(md_root):
+        return meta, paths
     for root, _, files in os.walk(md_root):
         for name in files:
             if not name.endswith(".md"):
                 continue
             path = os.path.join(root, name)
-            rel = os.path.relpath(path, md_root)
-            parts = rel.split(os.sep)
-            client_id = parts[0] if len(parts) > 1 else None
-            if client_id:
-                _DOC_PATHS[(client_id, basename(name))] = abspath(path)
-            else:
-                _DOC_PATHS[basename(name)] = abspath(path)
             fm = _parse_front_matter(_read_file(path))
-            item = {
-                "client_id": client_id,
-                "doc_id": fm.get("doc_id"),
-                "doc_type": fm.get("doc_type"),
-                "subtype": fm.get("subtype"),
-                "topic": fm.get("topic"),
-                "subtopic": fm.get("subtopic"),
-                "cta_text": fm.get("cta_text"),
-                "cta_action": fm.get("cta_action"),
-                "cta_from_turn": _safe_int(fm.get("cta_from_turn", 0), 0),
-                "verbatim_ids": fm.get("verbatim_ids") or [],
-                "aliases": fm.get("aliases") or [],
-                "suggest_h3": fm.get("suggest_h3") or [],
-                "suggest_refs": fm.get("suggest_refs") or [],
-                "situation_allowed": bool(fm.get("situation_allowed", False)),
-                "video_key": fm.get("video_key"),
-                # ↓↓↓ ЭМПАТИЯ ↓↓↓
-                "empathy_enabled": bool(fm.get("empathy_enabled", False)),
-                "empathy_tag": fm.get("empathy_tag"),
-            }
-            meta[(client_id, name)] = item
-            if client_id is None:
-                meta[name] = item
-    return meta
+            item = _meta_item(pack_id, name, fm)
+            meta[name] = item
+            paths[name] = abspath(path)
+    return meta, paths
 
-_DOC_META = None
-_DOC_PATHS = {}  # basename -> абсолютный путь
+
+_DOC_META_BY_PACK: dict[str, dict] = {}
+_DOC_PATHS_BY_PACK: dict[str, dict] = {}
+
+
+def _ensure_pack_loaded(client_id: str | None) -> str:
+    pack = resolve_pack_client_id(client_id)
+    if pack not in _DOC_META_BY_PACK:
+        meta, paths = load_doc_meta_for_pack(pack)
+        _DOC_META_BY_PACK[pack] = meta
+        _DOC_PATHS_BY_PACK[pack] = paths
+    return pack
+
 
 def get_doc_path(doc_name: str, client_id: str | None = None):
-    global _DOC_PATHS, _DOC_META
-    if not _DOC_PATHS:
-        _DOC_META = load_doc_meta()
-    if client_id:
-        item = _DOC_PATHS.get((client_id, doc_name))
-        if item:
-            return item
-        # Single-client compatibility mode: keep root-level md/ files working
-        # for the default tenant until content is moved under md/{client_id}/.
-        if client_id == DEFAULT_CLIENT_ID:
-            return _DOC_PATHS.get(doc_name)
-    return _DOC_PATHS.get(doc_name)
+    pack = _ensure_pack_loaded(client_id)
+    return _DOC_PATHS_BY_PACK.get(pack, {}).get(doc_name)
+
 
 def get_doc_meta(doc_name: str, client_id: str | None = None) -> dict:
-    """doc_name — basename файла, например 'clinic-contacts.md'"""
-    global _DOC_META
-    if _DOC_META is None:
-        _DOC_META = load_doc_meta()
-    if client_id:
-        item = _DOC_META.get((client_id, doc_name))
-        if item:
-            return item
-        wanted_doc_id = os.path.splitext(doc_name)[0]
-        for _, cand in _DOC_META.items():
-            if not isinstance(cand, dict):
-                continue
-            if cand.get("client_id") == client_id and cand.get("doc_id") == wanted_doc_id:
-                return cand
-        if client_id == DEFAULT_CLIENT_ID:
-            item = _DOC_META.get(doc_name)
-            if item:
-                return item
-            for _, cand in _DOC_META.items():
-                if not isinstance(cand, dict):
-                    continue
-                if cand.get("client_id") is None and cand.get("doc_id") == wanted_doc_id:
-                    return cand
-        return {}
-    return _DOC_META.get(doc_name, {})
+    pack = _ensure_pack_loaded(client_id)
+    meta_map = _DOC_META_BY_PACK.get(pack, {})
+    item = meta_map.get(doc_name)
+    if item:
+        return item
+    wanted_doc_id = os.path.splitext(doc_name)[0]
+    for cand in meta_map.values():
+        if isinstance(cand, dict) and cand.get("doc_id") == wanted_doc_id:
+            return cand
+    return {}

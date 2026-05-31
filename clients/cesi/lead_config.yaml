@@ -1,6 +1,6 @@
 # clients/cesi/lead_config.yaml — заполнить получателей перед prod (Phase M3)
 delivery: email
 recipients:
-  - REPLACE_WITH_CESI_ADMIN_EMAIL
+  - gothica@mail.ru
 subject_template: "Заявка с бота ЦЭСИ"
 store_in_postgres: true

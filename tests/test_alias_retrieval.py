@@ -26,11 +26,6 @@ def test_alias_thresholds_present() -> None:
 def test_deterministic_exact_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     import retriever as r
 
-    r._ALIAS_EMB_MATRIX = None
-    r._ALIAS_ROW_CORPUS_IDX = None
-    r._ALIAS_ROW_CLIENT = None
-    r._ALIAS_ARTIFACTS_ERROR = None
-
     fake = [
         {
             "file": "demo__service__test.md",
@@ -43,18 +38,20 @@ def test_deterministic_exact_alias(monkeypatch: pytest.MonkeyPatch) -> None:
             "text": "body",
         }
     ]
-    monkeypatch.setattr(r, "load_corpus_if_needed", lambda: fake)
-    monkeypatch.setattr(r, "_ALIAS_INDEX", r._build_alias_index(fake))
+    monkeypatch.setattr(r, "load_corpus_if_needed", lambda client_id=None: fake)
+    monkeypatch.setattr(r, "_alias_index_for", lambda client_id=None: r._build_alias_index(fake))
 
-    def _noop_load_alias() -> None:
+    def _fake_alias_state(client_id=None):
         import numpy as np
 
-        r._ALIAS_EMB_MATRIX = np.zeros((0, 8), dtype=np.float32)
-        r._ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-        r._ALIAS_ROW_CLIENT = []
-        r._ALIAS_ARTIFACTS_ERROR = ""
+        return (
+            np.zeros((0, 8), dtype=np.float32),
+            np.array([], dtype=np.int32),
+            [],
+            "",
+        )
 
-    monkeypatch.setattr(r, "_load_alias_embed_artifacts", _noop_load_alias)
+    monkeypatch.setattr(r, "_alias_embed_state", _fake_alias_state)
     monkeypatch.setattr(r, "_legacy_shadow_enabled", lambda: False)
 
     out = r.run_alias_pipeline("all on 4", client_id="test_client")
@@ -68,11 +65,6 @@ def test_scope_guard_uses_alias_yaml_not_retrieval_only(monkeypatch: pytest.Monk
     import query_selector as qs
     import retriever as r
 
-    r._ALIAS_EMB_MATRIX = None
-    r._ALIAS_ROW_CORPUS_IDX = None
-    r._ALIAS_ROW_CLIENT = None
-    r._ALIAS_ARTIFACTS_ERROR = None
-
     fake = [
         {
             "file": "x.md",
@@ -85,18 +77,20 @@ def test_scope_guard_uses_alias_yaml_not_retrieval_only(monkeypatch: pytest.Monk
             "text": "t",
         }
     ]
-    monkeypatch.setattr(r, "load_corpus_if_needed", lambda: fake)
-    monkeypatch.setattr(r, "_ALIAS_INDEX", r._build_alias_index(fake))
+    monkeypatch.setattr(r, "load_corpus_if_needed", lambda client_id=None: fake)
+    monkeypatch.setattr(r, "_alias_index_for", lambda client_id=None: r._build_alias_index(fake))
 
-    def _noop_load_alias() -> None:
+    def _fake_alias_state(client_id=None):
         import numpy as np
 
-        r._ALIAS_EMB_MATRIX = np.zeros((0, 8), dtype=np.float32)
-        r._ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-        r._ALIAS_ROW_CLIENT = []
-        r._ALIAS_ARTIFACTS_ERROR = ""
+        return (
+            np.zeros((0, 8), dtype=np.float32),
+            np.array([], dtype=np.int32),
+            [],
+            "",
+        )
 
-    monkeypatch.setattr(r, "_load_alias_embed_artifacts", _noop_load_alias)
+    monkeypatch.setattr(r, "_alias_embed_state", _fake_alias_state)
     monkeypatch.setattr(r, "_legacy_shadow_enabled", lambda: False)
 
     st, reason = qs.compute_retrieval_scope_with_conflict_guard(

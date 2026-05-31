@@ -30,6 +30,7 @@ _TONE_KEY_MAP: tuple[tuple[str, str], ...] = (
     (("lead", "phone_prompt_tpl"), "lead_phone_prompt_tpl"),
     (("lead", "phone_retry"), "lead_phone_retry"),
     (("lead", "submit_ok"), "lead_submit_ok"),
+    (("lead", "submit_ok_after_hours"), "lead_submit_ok_after_hours"),
     (("lead", "submit_error"), "lead_submit_error"),
     (("lead", "offer_declined"), "lead_offer_declined"),
     (("situation", "prompt"), "situation_prompt"),
@@ -55,6 +56,10 @@ _FALLBACK_TXT: dict[str, str] = {
     ),
     "lead_phone_retry": "Не получилось распознать номер. Напишите в формате +7XXXXXXXXXX.",
     "lead_submit_ok": "Спасибо! Администратор свяжется с вами в ближайшее время.",
+    "lead_submit_ok_after_hours": (
+        "Спасибо за заявку. Клиника сейчас не работает. "
+        "Мы свяжемся с вами в рабочее время."
+    ),
     "lead_submit_error": "Что-то пошло не так. Проверьте номер и попробуйте ещё раз.",
     "situation_prompt": (
         "Опишите коротко ситуацию — что болит, что беспокоит, или просто какой вопрос. "

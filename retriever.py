@@ -9,16 +9,13 @@ from typing import Any
 import numpy as np
 
 from config import (
-    ALIAS_EMB_PATH,
-    ALIAS_ROWS_PATH,
     BROAD_QUERY_MAX_WORDS,
-    CORPUS_PATH,
-    EMB_PATH,
     EMB_MODEL,
     RERANK_MODEL,
     RETRIEVE_CACHE_MAXSIZE,
     RETRIEVE_CACHE_TTL_SEC,
 )
+from core.client_data_loader import get_client_index
 from core.client_runtime import effective_corpus_client_id
 from core.routing_loader import THRESHOLDS
 from llm import client
@@ -39,42 +36,46 @@ _BROAD_EXCLUDE_TERMS = (
     "контакт",
 )
 
-_CORPUS: list | None = None
 _RE_H2 = re.compile(r"^##\s+.*?\{#([a-z0-9\-]+)\}\s*$", re.I | re.M)
 _RE_H3 = re.compile(r"^###\s+.*?\{#([a-z0-9\-]+)\}\s*$", re.I | re.M)
 _SECTION_CACHE: dict[str, dict] = {}
-_EMB: np.ndarray | None = None
-_EMB_LOAD_ERROR: str | None = None
-_ALIAS_INDEX: dict[str, list[dict]] | None = None
+_ALIAS_INDEX_BY_CLIENT: dict[str, dict[str, list[dict]]] = {}
 _RETRIEVE_CACHE_LOCK = threading.RLock()
 _RETRIEVE_CACHE: dict[tuple[str, int, str, str], tuple[float, list[dict]]] = {}
 
 
-def load_corpus_if_needed() -> list:
-    global _CORPUS, _ALIAS_INDEX
-    if _CORPUS is None:
-        try:
-            with open(CORPUS_PATH, "r", encoding="utf-8") as f:
-                _CORPUS = [json.loads(line) for line in f if line.strip()]
-        except FileNotFoundError:
-            _CORPUS = []
-        _ALIAS_INDEX = _build_alias_index(_CORPUS)
-    return _CORPUS
+def _client_bundle(client_id: str | None):
+    return get_client_index(client_id)
 
 
-def _get_embeddings() -> np.ndarray | None:
-    global _EMB, _EMB_LOAD_ERROR
-    if _EMB is not None:
-        return _EMB
-    if _EMB_LOAD_ERROR is not None:
-        return None
-    try:
-        _EMB = np.load(EMB_PATH)
-        return _EMB
-    except Exception as e:
-        _EMB_LOAD_ERROR = str(e)
-        log_json(logger, "embeddings_load_failed", emb_path=EMB_PATH, err=_EMB_LOAD_ERROR)
-        return None
+def load_corpus_if_needed(client_id: str | None = None) -> list:
+    cid = effective_corpus_client_id(client_id)
+    idx = _client_bundle(client_id)
+    if cid not in _ALIAS_INDEX_BY_CLIENT or _ALIAS_INDEX_BY_CLIENT[cid] is None:
+        _ALIAS_INDEX_BY_CLIENT[cid] = _build_alias_index(idx.corpus)
+    return idx.corpus
+
+
+def _get_embeddings(client_id: str | None = None) -> np.ndarray | None:
+    idx = _client_bundle(client_id)
+    return idx.embeddings
+
+
+def _alias_index_for(client_id: str | None) -> dict[str, list[dict]]:
+    cid = effective_corpus_client_id(client_id)
+    if cid not in _ALIAS_INDEX_BY_CLIENT:
+        _ALIAS_INDEX_BY_CLIENT[cid] = _build_alias_index(load_corpus_if_needed(client_id))
+    return _ALIAS_INDEX_BY_CLIENT[cid]
+
+
+def _alias_embed_state(client_id: str | None) -> tuple[np.ndarray | None, np.ndarray | None, list[str], str]:
+    idx = _client_bundle(client_id)
+    return (
+        idx.alias_emb_matrix,
+        idx.alias_row_corpus_idx,
+        idx.alias_row_client,
+        idx.alias_artifacts_error,
+    )
 
 
 def extract_id_from_heading(txt: str) -> str | None:
@@ -93,7 +94,7 @@ def get_chunk_by_ref(ref: str, *, client_id: str | None = None) -> dict | None:
     if not base.endswith(".md"):
         base = base + ".md"
     a = (anchor or "").strip().lower()
-    corpus = load_corpus_if_needed()
+    corpus = load_corpus_if_needed(client_id)
     cands = [ch for ch in corpus if os.path.basename(ch.get("file", "") or "") == base]
     if corpus_cid:
         client_cands = [ch for ch in cands if (ch.get("client_id") or "") == corpus_cid]
@@ -513,70 +514,8 @@ def _alias_probe_terms(q: str) -> list[str]:
     return out
 
 
-_ALIAS_EMB_MATRIX: np.ndarray | None = None
-_ALIAS_ROW_CORPUS_IDX: np.ndarray | None = None
-_ALIAS_ROW_CLIENT: list[str] | None = None
-_ALIAS_ARTIFACTS_ERROR: str | None = None
-
-
 def _legacy_shadow_enabled() -> bool:
     return os.getenv("ALIAS_LEGACY_SHADOW", "1").lower() in ("1", "true", "yes")
-
-
-def _embedding_dim_for_empty_alias_matrix() -> int:
-    try:
-        if os.path.isfile(EMB_PATH):
-            arr = np.load(EMB_PATH)
-            if arr.ndim == 2 and arr.shape[1] > 0:
-                return int(arr.shape[1])
-    except OSError:
-        pass
-    return 1536
-
-
-def _load_alias_embed_artifacts() -> None:
-    global _ALIAS_EMB_MATRIX, _ALIAS_ROW_CORPUS_IDX, _ALIAS_ROW_CLIENT, _ALIAS_ARTIFACTS_ERROR
-    if _ALIAS_EMB_MATRIX is not None:
-        return
-    dim0 = _embedding_dim_for_empty_alias_matrix()
-    try:
-        if not os.path.isfile(ALIAS_EMB_PATH) or not os.path.isfile(ALIAS_ROWS_PATH):
-            _ALIAS_ARTIFACTS_ERROR = "missing_alias_files"
-            _ALIAS_EMB_MATRIX = np.zeros((0, dim0), dtype=np.float32)
-            _ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-            _ALIAS_ROW_CLIENT = []
-            return
-        emb = np.load(ALIAS_EMB_PATH)
-        clients: list[str] = []
-        idxs: list[int] = []
-        with open(ALIAS_ROWS_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                o = json.loads(line)
-                idxs.append(int(o["corpus_idx"]))
-                clients.append(str(o.get("client_id") or ""))
-        if emb.shape[0] != len(idxs):
-            _ALIAS_ARTIFACTS_ERROR = "alias_rows_emb_shape_mismatch"
-            _ALIAS_EMB_MATRIX = np.zeros((0, int(emb.shape[1]) if emb.ndim == 2 else dim0), dtype=np.float32)
-            _ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-            _ALIAS_ROW_CLIENT = []
-            return
-        if emb.shape[0] == 0:
-            _ALIAS_EMB_MATRIX = emb.astype(np.float32)
-            _ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-            _ALIAS_ROW_CLIENT = []
-            return
-        _ALIAS_EMB_MATRIX = emb.astype(np.float32)
-        _ALIAS_ROW_CORPUS_IDX = np.array(idxs, dtype=np.int32)
-        _ALIAS_ROW_CLIENT = clients
-        _ALIAS_ARTIFACTS_ERROR = ""
-    except Exception as e:
-        _ALIAS_ARTIFACTS_ERROR = str(e)
-        _ALIAS_EMB_MATRIX = np.zeros((0, dim0), dtype=np.float32)
-        _ALIAS_ROW_CORPUS_IDX = np.array([], dtype=np.int32)
-        _ALIAS_ROW_CLIENT = []
 
 
 def _chunk_key_tuple(ch: dict) -> tuple[Any, Any, Any]:
@@ -713,11 +652,13 @@ def run_alias_pipeline(q: str, *, client_id: str | None = None) -> dict[str, Any
     thr = THRESHOLDS.alias
     q_raw = (q or "").strip()
     q_norm = _norm_text(q)
-    corpus = load_corpus_if_needed()
+    corpus = load_corpus_if_needed(client_id)
     n = len(corpus)
-    _load_alias_embed_artifacts()
+    alias_emb_matrix, alias_row_corpus_idx, alias_row_client, alias_artifacts_error = (
+        _alias_embed_state(client_id)
+    )
 
-    alias_idx = _ALIAS_INDEX or {}
+    alias_idx = _alias_index_for(client_id)
     probe_terms = _alias_probe_terms(q)
     candidate_map: dict[tuple[Any, Any, Any], dict] = {}
     for term in probe_terms:
@@ -739,23 +680,23 @@ def run_alias_pipeline(q: str, *, client_id: str | None = None) -> dict[str, Any
     sim_second = 0.0
     q_embed = normalize_retrieval_query(q_raw) or q_raw
     if (
-        _ALIAS_EMB_MATRIX is not None
-        and int(_ALIAS_EMB_MATRIX.shape[0]) > 0
-        and _ALIAS_ROW_CORPUS_IDX is not None
+        alias_emb_matrix is not None
+        and int(alias_emb_matrix.shape[0]) > 0
+        and alias_row_corpus_idx is not None
         and q_embed.strip()
     ):
         try:
             v = embed_q(q_embed)
-            sims_rows = _ALIAS_EMB_MATRIX @ v
+            sims_rows = alias_emb_matrix @ v
             row_ok = np.ones(sims_rows.shape[0], dtype=bool)
             if client_id:
                 row_ok = np.array(
-                    [(not cid) or (cid == client_id) for cid in (_ALIAS_ROW_CLIENT or [])],
+                    [(not cid) or (cid == client_id) for cid in (alias_row_client or [])],
                     dtype=bool,
                 )
             sims_f = sims_rows.astype(np.float32).copy()
             sims_f[~row_ok] = -1.0
-            np.maximum.at(chunk_max, _ALIAS_ROW_CORPUS_IDX, sims_f)
+            np.maximum.at(chunk_max, alias_row_corpus_idx, sims_f)
             for i in range(n):
                 c0 = corpus[i]
                 if not isinstance(c0, dict):
@@ -838,7 +779,7 @@ def run_alias_pipeline(q: str, *, client_id: str | None = None) -> dict[str, Any
         "alias_rank": int(rank),
         "alias_decision": str(best_tier),
         "alias_effective_score": round(float(max(best_eff, 0.0)), 4),
-        "alias_artifact_error": (_ALIAS_ARTIFACTS_ERROR or None),
+        "alias_artifact_error": (alias_artifacts_error or None),
         "alias_rescue_env": bool(rescue_env),
     }
 
@@ -908,32 +849,36 @@ def corpus_alias_leader(
 
 def alias_debug_score_for_chunk(q: str, ch: dict, *, client_id: str | None = None) -> dict[str, Any]:
     """Debug-only: alias components for one chunk (used by /__debug/retrieval)."""
+    cid = effective_corpus_client_id(client_id)
     q_raw = (q or "").strip()
     q_norm = _norm_text(q)
-    corpus = load_corpus_if_needed()
-    _load_alias_embed_artifacts()
+    corpus = load_corpus_if_needed(client_id)
+    alias_emb_matrix, alias_row_corpus_idx, alias_row_client, _alias_err = _alias_embed_state(
+        client_id
+    )
     pos = _corpus_index_for_chunk(corpus, ch)
     n = len(corpus)
     chunk_max = np.full(n, -1.0, dtype=np.float32)
     q_embed = normalize_retrieval_query(q_raw) or q_raw
     if (
         pos is not None
-        and _ALIAS_EMB_MATRIX is not None
-        and int(_ALIAS_EMB_MATRIX.shape[0]) > 0
+        and alias_emb_matrix is not None
+        and int(alias_emb_matrix.shape[0]) > 0
+        and alias_row_corpus_idx is not None
         and q_embed.strip()
     ):
         try:
             v = embed_q(q_embed)
-            sims_rows = _ALIAS_EMB_MATRIX @ v
+            sims_rows = alias_emb_matrix @ v
             row_ok = np.ones(sims_rows.shape[0], dtype=bool)
-            if client_id:
+            if cid:
                 row_ok = np.array(
-                    [(not cid) or (cid == client_id) for cid in (_ALIAS_ROW_CLIENT or [])],
+                    [(not c) or (c == cid) for c in (alias_row_client or [])],
                     dtype=bool,
                 )
             sims_f = sims_rows.astype(np.float32).copy()
             sims_f[~row_ok] = -1.0
-            np.maximum.at(chunk_max, _ALIAS_ROW_CORPUS_IDX, sims_f)
+            np.maximum.at(chunk_max, alias_row_corpus_idx, sims_f)
         except Exception:
             pass
     emb_val = float(chunk_max[pos]) if pos is not None else -1.0
@@ -1115,7 +1060,8 @@ def retrieve(
         telemetry.setdefault("scope_widen_fallback", False)
 
     client_id = effective_corpus_client_id(client_id)
-    emb = _get_embeddings()
+    idx = _client_bundle(client_id)
+    emb = _get_embeddings(client_id)
     q_in = (q or "").strip()
     q_norm = normalize_retrieval_query(q_in)
     q_embed = q_norm if q_norm else q_in
@@ -1133,7 +1079,7 @@ def retrieve(
             "retrieval_skipped_no_embeddings",
             used_query=q_embed[:500],
             query_raw=q_in[:200],
-            emb_path=EMB_PATH,
+            emb_path=idx.embeddings_path,
         )
         return []
 
@@ -1165,7 +1111,7 @@ def retrieve(
                 )
             return out_cached
 
-    corpus = load_corpus_if_needed()
+    corpus = load_corpus_if_needed(client_id)
     v = embed_q(q_embed)
     widen_used = False
     prior_scope: str | None = str(scope_topic).strip() if scope_topic else None

@@ -44,6 +44,7 @@ from core.client_config_loader import (
     tone_to_txt_dict,
     ui_menu_to_payload,
 )
+from core.origin_guard import validate_widget_origin
 from core.routing_loader import THRESHOLDS
 from core.video_catalog_loader import catalog_for_widget, get_external_video_src
 from lead_service import handle_lead
@@ -672,6 +673,13 @@ def _bind_chat_ctx(sid: str, client_id: str) -> None:
     bind_client_id(sid, client_id)
 
 
+def _widget_origin_forbidden(client_id: str | None):
+    err = validate_widget_origin(client_id)
+    if not err:
+        return None
+    return safe_jsonify({"error": err, "client_id": client_id}), 403
+
+
 def _apply_content_retrieval_scope_ctx(
     scope_topic_candidate: str | None,
     q: str,
@@ -1079,6 +1087,7 @@ def _orchestrate_ask_turn(data: dict):
     ref = (data.get('ref') or '').strip()
     sid = sid_from_body(data)
     if q and q.lower() in ('/reset', '/новая'):
+        _bind_chat_ctx(sid, client_id)
         mem_reset(sid)
         return AskOrchestrationResult(kind='reset_session', q=q, sid=sid, client_id=client_id)
     q, truncated = _normalize_question_text(q_raw)
@@ -1712,6 +1721,12 @@ def ask():
     request.ctx["turn_t0_monotonic"] = time.monotonic()
     try:
         data = request.get_json(force=True) or {}
+        client_id = resolve_client_id(data.get("client_id"))
+        if client_id is None:
+            return safe_jsonify({"error": "unknown_client"}), 403
+        blocked = _widget_origin_forbidden(client_id)
+        if blocked:
+            return blocked
         orch_r = _orchestrate_ask_turn(data)
         q = orch_r.q or ""
         return _dispatch_orchestration_json(orch_r)
@@ -1906,6 +1921,12 @@ def ask_stream():
     request.ctx["turn_t0_monotonic"] = time.monotonic()
     try:
         data = request.get_json(force=True) or {}
+        client_id = resolve_client_id(data.get("client_id"))
+        if client_id is None:
+            return safe_jsonify({"error": "unknown_client"}), 403
+        blocked = _widget_origin_forbidden(client_id)
+        if blocked:
+            return blocked
         orch_r = _orchestrate_ask_turn(data)
         q = orch_r.q or ""
         return _dispatch_orchestration_sse(orch_r)
@@ -2071,6 +2092,10 @@ def create_lead():
     client_id = resolve_client_id(data.get("client_id"))
     if client_id is None:
         return jsonify({"ok": False, "error_code": "unknown_client", "delivery": None}), 403
+    blocked = _widget_origin_forbidden(client_id)
+    if blocked:
+        body, status = blocked
+        return body, status
     data["client_id"] = client_id
     sid = sid_from_body(data)
     data["sid"] = sid

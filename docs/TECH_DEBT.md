@@ -13,7 +13,7 @@
 | Один `SQLITE_PATH` | M2: `session.py` → `data/{id}/bot.db` |
 | `doctors_lookup` → корневой `md/` | M1 |
 | Нет Origin guard на `/ask` | M1 |
-| Lead stub hardcoded | M3: `lead_config.yaml` |
+| Lead stub hardcoded | ~~M3~~ email + `lead_config.yaml` (`core/lead_email.py`) |
 
 ---
 
@@ -23,7 +23,7 @@
 |----------|-------------|
 | `app.py` большой | Routing cleanup после M5 |
 | Legacy `classify_intent` + Resolver | evals → свести |
-| `enqueue_lead` не вызывается | M3 prod lead |
+| `enqueue_lead` не вызывается | ~~M3~~ PG + email в `lead_service` |
 | Нет `pending_followup_ref` | Guide phase |
 
 ---

@@ -1,6 +1,17 @@
 # Explicit clinic business constraints (not retrieved from md).
 contact:
-  phone_display: "+7 (495) 128-47-60"
+  phone_display: "+7 (4152) 21-55-34"
+
+hours:
+  timezone: Asia/Kamchatka
+  weekly:
+    mon: { start: "08:00", end: "20:00" }
+    tue: { start: "08:00", end: "20:00" }
+    wed: { start: "08:00", end: "20:00" }
+    thu: { start: "08:00", end: "20:00" }
+    fri: { start: "08:00", end: "20:00" }
+    sat: { start: "08:00", end: "14:00" }
+    sun: null
 
 policies:
   no_pediatric_dentistry:

@@ -2,6 +2,17 @@
 contact:
   phone_display: "+7 (900) 444-69-97"
 
+hours:
+  timezone: Asia/Kamchatka
+  weekly:
+    mon: { start: "09:00", end: "18:00" }
+    tue: { start: "09:00", end: "18:00" }
+    wed: { start: "09:00", end: "18:00" }
+    thu: { start: "09:00", end: "18:00" }
+    fri: { start: "09:00", end: "18:00" }
+    sat: { start: "09:00", end: "15:00" }
+    sun: null
+
 policies:
   no_pediatric_dentistry:
     triggers:

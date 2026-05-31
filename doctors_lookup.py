@@ -11,6 +11,8 @@ from typing import Any, TypedDict
 import alias_lexical
 import yaml
 
+from core.client_config_loader import resolve_pack_client_id
+from core.client_runtime import client_md_dir
 from query_selector import match_service_from_catalog
 
 _MD_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "md")
@@ -60,7 +62,7 @@ class DoctorListFact(TypedDict, total=False):
 
 
 def _safe_client_id(client_id: str | None) -> str:
-    return (client_id or "default").strip() or "default"
+    return resolve_pack_client_id(client_id)
 
 
 def _client_catalog_path(client_id: str | None) -> str:
@@ -259,17 +261,23 @@ def _doctor_list_fact(_path: str, fm: dict[str, Any], body: str, stem: str) -> D
     return fact
 
 
-def _iter_doctor_paths() -> list[str]:
+def _doctor_md_base(client_id: str | None) -> str:
+    pack = resolve_pack_client_id(client_id)
+    return client_md_dir(pack)
+
+
+def _iter_doctor_paths(*, client_id: str | None = None) -> list[str]:
+    md_base = _doctor_md_base(client_id)
     return sorted(
         p
-        for p in glob.glob(os.path.join(_MD_BASE, "doctors__doctor__*.md"))
+        for p in glob.glob(os.path.join(md_base, "doctors__doctor__*.md"))
         if os.path.basename(p).lower() != "doctors__doctor__overview.md"
     )
 
 
-def _doctor_paths_mtime_max() -> float:
+def _doctor_paths_mtime_max(*, client_id: str | None) -> float:
     m = 0.0
-    for p in _iter_doctor_paths():
+    for p in _iter_doctor_paths(client_id=client_id):
         try:
             m = max(m, os.path.getmtime(p))
         except OSError:
@@ -277,10 +285,10 @@ def _doctor_paths_mtime_max() -> float:
     return m
 
 
-def _collect_client_doctor_name_phrases() -> frozenset[str]:
+def _collect_client_doctor_name_phrases(*, client_id: str | None) -> frozenset[str]:
     """Подстроковые ключи из frontmatter + H1 активных врачей (нижний регистр, ё→е)."""
     phrases: set[str] = set()
-    for path in _iter_doctor_paths():
+    for path in _iter_doctor_paths(client_id=client_id):
         fm, body, stem = _read_md_split(path)
         if fm.get("active") is False:
             continue
@@ -296,12 +304,12 @@ def _collect_client_doctor_name_phrases() -> frozenset[str]:
 def cached_doctor_name_substrings(*, client_id: str | None) -> frozenset[str]:
     """Кэш по client_id и mtime md врачей."""
     cid = _safe_client_id(client_id)
-    mt = _doctor_paths_mtime_max()
+    mt = _doctor_paths_mtime_max(client_id=client_id)
     with _NAMES_INDEX_LOCK:
         hit = _NAMES_INDEX.get(cid)
         if hit is not None and hit[0] == mt:
             return hit[1]
-        phrases = _collect_client_doctor_name_phrases()
+        phrases = _collect_client_doctor_name_phrases(client_id=client_id)
         _NAMES_INDEX[cid] = (mt, phrases)
         return phrases
 
@@ -310,11 +318,11 @@ def _norm_ground_truth_text(text: str) -> str:
     return (text or "").strip().lower().replace("ё", "е")
 
 
-def _build_doctor_ground_truth_index() -> tuple[frozenset[str], frozenset[str]]:
+def _build_doctor_ground_truth_index(*, client_id: str | None) -> tuple[frozenset[str], frozenset[str]]:
     """Role phrases from position/aliases + specialty keys confirmed by doctor md."""
     role_phrases: set[str] = set()
     confirmed_kw: set[str] = set()
-    for path in _iter_doctor_paths():
+    for path in _iter_doctor_paths(client_id=client_id):
         fm, _body, _stem = _read_md_split(path)
         if fm.get("active") is False:
             continue
@@ -342,12 +350,12 @@ def cached_doctor_ground_truth_index(
 ) -> tuple[frozenset[str], frozenset[str]]:
     """(role_phrases, confirmed_specialty_keywords) cached by md mtime."""
     cid = _safe_client_id(client_id)
-    mt = _doctor_paths_mtime_max()
+    mt = _doctor_paths_mtime_max(client_id=client_id)
     with _GROUND_TRUTH_LOCK:
         hit = _GROUND_TRUTH_INDEX.get(cid)
         if hit is not None and hit[0] == mt:
             return hit[1], hit[2]
-        role_phrases, confirmed_kw = _build_doctor_ground_truth_index()
+        role_phrases, confirmed_kw = _build_doctor_ground_truth_index(client_id=client_id)
         _GROUND_TRUTH_INDEX[cid] = (mt, role_phrases, confirmed_kw)
         return role_phrases, confirmed_kw
 
@@ -392,10 +400,10 @@ def doctor_ground_truth_mention(text: str, *, client_id: str | None) -> bool:
     return False
 
 
-def load_all_doctors() -> list[DoctorPublic]:
+def load_all_doctors(*, client_id: str | None = None) -> list[DoctorPublic]:
     """Все активные записи докторских md (без overview)."""
     out: list[DoctorPublic] = []
-    for path in _iter_doctor_paths():
+    for path in _iter_doctor_paths(client_id=client_id):
         fm, body, stem = _read_md_split(path)
         if fm.get("active") is False:
             continue
@@ -408,7 +416,7 @@ def find_doctors_by_service(service_id: str, *, client_id: str) -> list[DoctorLi
     if not sid:
         return []
     found: list[DoctorListFact] = []
-    for path in _iter_doctor_paths():
+    for path in _iter_doctor_paths(client_id=client_id):
         fm, body, stem = _read_md_split(path)
         if fm.get("active") is False:
             continue
@@ -435,7 +443,7 @@ def find_doctors_by_topic(topic: str, *, client_id: str) -> list[DoctorListFact]
         return []
     found: list[DoctorListFact] = []
     seen: set[str] = set()
-    for path in _iter_doctor_paths():
+    for path in _iter_doctor_paths(client_id=client_id):
         fm, body, stem = _read_md_split(path)
         if fm.get("active") is False:
             continue
@@ -651,7 +659,7 @@ def doctors_lookup(q: str, *, client_id: str) -> dict[str, Any] | None:
         return None
 
     q_lem = _lemma_set(q0)
-    paths = _iter_doctor_paths()
+    paths = _iter_doctor_paths(client_id=client_id)
     if not paths:
         return None
 

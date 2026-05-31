@@ -2,7 +2,7 @@
 
 import os
 
-from lead_service import handle_lead
+from lead_service import handle_lead, resolve_lead_submit_message
 from llm import classify_lead_name_shape
 from name_gate import hard_reject_lead_name
 from policy import booking_intent
@@ -221,7 +221,7 @@ def _lead_flow_payload(
         set_situation_pending(sid, False)
         set_situation_note(sid, "")
         return service_payload(
-            txt["lead_submit_ok"],
+            resolve_lead_submit_message(client_id, txt),
             sid,
             client_id,
             lead_flow=True,
