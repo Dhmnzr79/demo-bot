@@ -309,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             must_not_contain = []
 
         sid = f"smoke_{case_id}_{ts}_{run_tag}"
-        client_id = os.getenv("CLIENT_ID") or "default"
+        client_id = os.getenv("CLIENT_ID") or "demo"
 
         if _uses_test_client():
             _reset_smoke_session(sid)

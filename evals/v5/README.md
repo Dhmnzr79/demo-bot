@@ -53,7 +53,7 @@ python evals/v5/run_e2e_smoke.py
 Параметры через env:
 - `BOT_URL` — URL endpoint `/ask` (default: `http://localhost:5000/ask`)
 - `BOT_TIMEOUT_SEC` — timeout на запрос (default: 20)
-- `CLIENT_ID` — client_id для запроса (default: `default`)
+- `CLIENT_ID` — client_id для запроса (default: `demo`; smoke всегда против `clients/demo/`)
 - `E2E_SMOKE_PATH` — путь к json (default: `evals/v5/e2e_smoke.json`)
 
 ### Как обновлять baseline
