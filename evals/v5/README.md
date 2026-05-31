@@ -35,6 +35,7 @@ python evals/v5/run_layer_eval.py --layer all
 
 - `question`: текущий turn
 - `history`: опционально, массив предыдущих turns вида `[{\"question\": \"...\"}]` (runner проигрывает их в `/ask` с той же `sid`)
+- `client_id`: опционально, переопределяет `CLIENT_ID` env для этого кейса (multiclient golden)
 - `expected_route`: опционально, строка (см. `_infer_route_from_response` — приоритет `meta.service_route`)
 - `session_seed`: опционально, объект (напр. `{"pending_lead_offer": true}`) — только с `E2E_USE_TEST_CLIENT=1`; runner делает `mem_reset(sid)` перед кейсом, затем seed
 - `expected_route_any`: опционально, массив строк (ambiguous кейсы)
@@ -53,7 +54,10 @@ python evals/v5/run_e2e_smoke.py
 Параметры через env:
 - `BOT_URL` — URL endpoint `/ask` (default: `http://localhost:5000/ask`)
 - `BOT_TIMEOUT_SEC` — timeout на запрос (default: 20)
-- `CLIENT_ID` — client_id для запроса (default: `demo`; smoke всегда против `clients/demo/`)
+- `CLIENT_ID` — default client_id для кейсов без поля `client_id` (default: `demo`)
+- `E2E_SMOKE_CLIENT` / `--client` — запустить только кейсы для указанного client_id
+
+CLI: `python evals/v5/run_e2e_smoke.py --client cesi --case-id smoke_cesi_contacts_address`
 - `E2E_SMOKE_PATH` — путь к json (default: `evals/v5/e2e_smoke.json`)
 
 ### Как обновлять baseline

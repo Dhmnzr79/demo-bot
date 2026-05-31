@@ -20,3 +20,13 @@ def test_infer_route_bare_affirmative() -> None:
 def test_infer_route_lead_flow_from_meta_flag() -> None:
     resp = {"answer": "ok", "meta": {"lead_flow": True, "service_route": "lead_flow"}}
     assert _infer_route_from_response(resp) == "lead_flow"
+
+
+def test_infer_route_orch_route_passthrough() -> None:
+    resp = {"answer": "ok", "meta": {"orch_route": "retrieval_chunk"}}
+    assert _infer_route_from_response(resp) == "retrieval_chunk"
+
+
+def test_infer_route_orch_route_duplicate_short_circuit() -> None:
+    resp = {"answer": "ok", "meta": {"orch_route": "duplicate_short_circuit"}}
+    assert _infer_route_from_response(resp) == "duplicate_short_circuit"

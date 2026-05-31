@@ -181,19 +181,20 @@ def resolve_with_fallback(
     client_id: str,
     sid: str,
     session_state: dict[str, Any] | None = None,
-) -> tuple[DecisionFrame, list[str]]:
+) -> tuple[DecisionFrame, list[str], str | None]:
     """
     Run Resolver LLM decision, apply safety-net against THRESHOLDS via classify_intent fallback.
     session_state reserved for future (context); not used in PR #1.2.
 
-    Returns (DecisionFrame, safety_net_used) where safety_net_used is a subset of
-    ["intent", "topic", "query_mode"].
+    Returns (DecisionFrame, safety_net_used, legacy_intent) where safety_net_used is a subset of
+    ["intent", "topic", "query_mode"], and legacy_intent is set only when safety-net calls classify_intent.
     """
     _ = session_state  # intentional no-op until multi-client/context wiring
     from core.routing_loader import THRESHOLDS
 
     decision = resolve_decision_frame(question=question, history=history)
     flags: list[str] = []
+    legacy_intent: str | None = None
 
     thresh = THRESHOLDS.resolver.min_confidence
     ci = float(decision.confidence.intent or 0.0)
@@ -201,6 +202,7 @@ def resolve_with_fallback(
         from llm import classify_intent
 
         old_intent = classify_intent(question, client_id=client_id, sid=sid)
+        legacy_intent = str(old_intent)
         decision.route_intent = map_classify_intent_to_route_intent(old_intent)
         flags.append("intent")
         log_json(
@@ -229,7 +231,7 @@ def resolve_with_fallback(
         flags.append("query_mode")
         log_json(logger, "safety_net_query_mode_used", sid=sid, client_id=client_id, conf=round(cm, 4))
 
-    return decision, flags
+    return decision, flags, legacy_intent
 
 
 def maybe_start_shadow_resolver(*, question: str, sid: str, client_id: str) -> None:

@@ -1,5 +1,5 @@
 {
-  "baseline": 52,
+  "baseline": 54,
   "known_v4_failures": [
     {
       "case_id": "smoke_multi_turn_all_on_4_price",
@@ -216,7 +216,7 @@
     {
       "id": "smoke_cross_topic_extraction",
       "question": "Нужно удалить зуб, что делать?",
-      "expected_route": "retrieval_chunk",
+      "expected_route": "catalog_md_first",
       "must_not_contain": ["сделаем имплант", "поставим имплант", "запишем на имплант"],
       "comment": "extraction: в md допустимо упоминание импланта как связанной темы; запрещаем только «продажные» формулировки",
       "coverage_class": "STRONG"
@@ -330,7 +330,7 @@
         {"question": "Какая гарантия на импланты?"}
       ],
       "question": "А на коронки?",
-      "expected_route": "retrieval_chunk",
+      "expected_route": "catalog_md_first",
       "must_contain": ["корон"],
       "comment": "multi-turn: переключение контекста импланты → коронки",
       "coverage_class": "WEAK"
@@ -341,7 +341,7 @@
         {"question": "Что такое All-on-6?"}
       ],
       "question": "А по времени это сколько?",
-      "expected_route": "retrieval_chunk",
+      "expected_route": "catalog_md_first",
       "must_contain": ["месяц"],
       "comment": "multi-turn: follow-up про время после обзора — ответ должен дать временной ориентир (напр. месяцы), а не конкретное слово «срок»",
       "coverage_class": "WEAK"
@@ -369,7 +369,7 @@
     {
       "id": "smoke_booking_ambiguous_consultation",
       "question": "Хочу проконсультироваться по имплантации",
-      "expected_route_any": ["lead_flow", "retrieval_chunk", "guided"],
+      "expected_route_any": ["lead_flow", "retrieval_chunk", "guided", "catalog_md_first"],
       "comment": "ambiguous: допускаем booking или контент (зависит от текущей логики)",
       "coverage_class": "WEAK"
     },
@@ -377,7 +377,7 @@
     {
       "id": "smoke_cross_topic_extract_and_implant",
       "question": "Я хочу удалить зуб и поставить имплант",
-      "expected_route": "retrieval_chunk",
+      "expected_route": "catalog_md_first",
       "must_contain": [],
       "comment": "multi-intent: удаление + имплантация. В Phase 1 допустим single-source ответ по доминирующей релевантной теме; полноценная compound-архитектура вынесена после Phase 1. Smoke проверяет маршрут content (retrieval_chunk), а не буквальное слово «удаление» в ответе.",
       "coverage_class": "WEAK"
@@ -388,13 +388,13 @@
       "must_contain": ["гарант"],
       "must_not_contain": ["могу коротко подсказать", "что для вас важнее", "выбрать направление"],
       "expected_route": "retrieval_chunk",
-      "comment": "Короткий вопрос про гарантию: ожидается content (retrieval_chunk в smoke по meta.file); A5 Arbiter выбирает источник при 2+ кандидатах.",
+      "comment": "Короткий вопрос про гарантию: content retrieval; A5 Arbiter выбирает источник при 2+ кандидатах.",
       "coverage_class": "STRONG"
     },
     {
       "id": "smoke_cross_topic_ortho_comparison",
       "question": "Брекеты или элайнеры?",
-      "expected_route": "retrieval_chunk",
+      "expected_route": "catalog_md_first",
       "must_contain": ["брекет"],
       "comment": "cross-topic + comparison: ортодонтия",
       "coverage_class": "STRONG"
@@ -487,6 +487,24 @@
       "must_contain": ["корон"],
       "comment": "comparison baseline — retrieval до guide_router",
       "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_cesi_contacts_address",
+      "client_id": "cesi",
+      "question": "Где вы находитесь?",
+      "expected_route": "contacts_chunk",
+      "must_contain": ["елизово"],
+      "comment": "cesi pack: адрес Елизово/Ленина (multiclient routing golden)",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_nikadent_contacts_address",
+      "client_id": "nikadent",
+      "question": "Где вы находитесь?",
+      "expected_route": "contacts_chunk",
+      "must_contain": ["рябиков"],
+      "comment": "nikadent pack: филиал Рябикова (multiclient routing golden)",
+      "coverage_class": "STRONG"
     }
   ]
 }

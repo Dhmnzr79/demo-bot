@@ -115,14 +115,8 @@ def _infer_route_from_response(resp: dict[str, Any]) -> str:
         return svc
 
     orch = str(meta.get("orch_route") or "").strip().lower()
-    if orch == "price_lookup":
-        return "price_lookup"
-    if orch == "doctors_list":
-        return "doctors_list"
-    if orch == "contacts_chunk":
-        return "contacts_chunk"
-    if orch == "price_concern":
-        return "price_concern"
+    if orch:
+        return orch
 
     ingress_route = str(meta.get("ingress_route") or "").strip().lower()
     if ingress_route and ingress_route != "normal":
@@ -229,6 +223,12 @@ def main(argv: list[str] | None = None) -> int:
         allow_abbrev=False,
     )
     ap.add_argument(
+        "--client",
+        default=None,
+        metavar="CLIENT_ID",
+        help="Run only cases for this client_id (case field or default demo). Also: E2E_SMOKE_CLIENT=id",
+    )
+    ap.add_argument(
         "--case-id",
         action="append",
         default=None,
@@ -277,6 +277,25 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"E2E smoke: no cases match --case-id / E2E_SMOKE_CASE_ID filter {sorted(filter_ids)!r}")
         cases = filtered
 
+    client_filter: str | None = None
+    if ns.client and str(ns.client).strip():
+        client_filter = str(ns.client).strip().lower()
+    elif (os.getenv("E2E_SMOKE_CLIENT") or "").strip():
+        client_filter = str(os.getenv("E2E_SMOKE_CLIENT")).strip().lower()
+
+    if client_filter is not None:
+        filtered_by_client: list[dict[str, Any]] = []
+        default_client = (os.getenv("CLIENT_ID") or "demo").strip().lower()
+        for r in cases:
+            if not isinstance(r, dict):
+                continue
+            case_client = str(r.get("client_id") or default_client).strip().lower()
+            if case_client == client_filter:
+                filtered_by_client.append(r)
+        if not filtered_by_client:
+            raise ValueError(f"E2E smoke: no cases for client filter {client_filter!r}")
+        cases = filtered_by_client
+
     results: list[CaseResult] = []
     passed = 0
     failed = 0
@@ -309,7 +328,8 @@ def main(argv: list[str] | None = None) -> int:
             must_not_contain = []
 
         sid = f"smoke_{case_id}_{ts}_{run_tag}"
-        client_id = os.getenv("CLIENT_ID") or "demo"
+        case_client_id = str(row.get("client_id") or "").strip()
+        client_id = case_client_id or os.getenv("CLIENT_ID") or "demo"
 
         if _uses_test_client():
             _reset_smoke_session(sid)

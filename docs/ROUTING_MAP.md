@@ -130,15 +130,15 @@
 |---------|-----------|------------|
 | **Orchestration route** | `AskOrchestrationResult.chunk_route` / `.service_route` в `app.py`; для chunk-ответов дублируется в **`meta.orch_route`** (`chunk_responder.py`) | внутренняя развилка пайплайна |
 | **Smoke route** | `_infer_route_from_response()` в `evals/v5/run_e2e_smoke.py` | контракт `expected_route` в `e2e_smoke.json` — **не** читает `meta.route` |
-| **Telemetry route** | PG/JSONL `turn_complete` → `details.route` через `finalize_ask()` / `_infer_route(payload)` | observability, не контракт smoke |
+| **Telemetry route** | PG/JSONL `turn_complete` → `details.route` через `orchestration/finalize_turn.py` | observability, не контракт smoke |
 
 ### Как smoke выводит route (`run_e2e_smoke.py`)
 
 Порядок (первое совпадение):
 
-1. **`meta.service_route`** — orchestration route из `_service_reply` / chunk `orch_route` (Phase 3a)
-2. `meta.orch_route` ∈ `{price_lookup, doctors_list, contacts_chunk, price_concern}` → как есть
-2. `meta.ingress_route` (≠ `normal`) → `ingress_{route}`
+1. **`meta.service_route`** — orchestration route из `_service_reply` / pre-Resolver service paths (Phase 3a)
+2. **`meta.orch_route`** — любое непустое значение как есть (Phase 3 ✓)
+3. `meta.ingress_route` (≠ `normal`) → `ingress_{route}`
 3. `meta.handoff_filter` → `handoff_filter`
 4. `meta.lead_flow` или `meta.booking_intent` → `lead_flow`
 5. `meta.low_score` → `low_score_fallback`
@@ -155,9 +155,9 @@
 | Orchestration (`service_route` / `chunk_route`) | Что увидит smoke |
 |-------------------------------------------------|------------------|
 | `continuation_clarify`, `bare_affirmative`, `lead_offer_declined` | как в orchestration (**через `meta.service_route`**, Phase 3a) |
-| `catalog_md_first` | `retrieval_chunk` (есть `meta.file`) |
+| `catalog_md_first` | через `meta.orch_route` (Phase 3 ✓) |
 | `retrieval_no_candidates` | часто `guided` (quick_replies) или `""` |
-| `duplicate_short_circuit`, `booking_flow` | пока без `service_route` в JSON — **не** использовать в smoke |
+| `duplicate_short_circuit`, `booking_flow` | через `meta.service_route` (Phase 3a) |
 | chunk с `orch_route=retrieval_chunk` | `retrieval_chunk` (шаг 10) |
 
 ---
@@ -175,7 +175,8 @@
 | `lead_flow` | `meta.lead_flow` / `meta.booking_intent` | `smoke_booking_want` |
 | `price_lookup` | `orch_route`, `meta.intent`, или `__pricing__` в file | `smoke_price_classic` |
 | `price_concern` | `orch_route` или `meta.intent` | `smoke_price_concern_expensive` |
-| `retrieval_chunk` | `meta.file` (content md) | `smoke_content_impl_process_with_doctor_word` |
+| `retrieval_chunk` | `meta.orch_route` или `meta.file` (content md) | `smoke_content_impl_process_with_doctor_word` |
+| `catalog_md_first` | `meta.orch_route` (catalog md priority path) | `smoke_cross_topic_extraction` |
 | `doctors_list` | `meta.orch_route=doctors_list` | `smoke_doctors_who_classic_implant` (`expected_route_any`) |
 | `catalog_facts` | `meta.intent=catalog_facts` | *(пока нет отдельного smoke-кейса)* |
 | `guided` | `quick_replies` без file | `smoke_noise_unclear_short` |
@@ -215,11 +216,15 @@ Runner: `python evals/v5/run_e2e_smoke.py` (см. `evals/v5/README.md`).
 | `smoke_continuation_phrase_no_context` | `continuation_clarify` |
 | `smoke_bare_yes_no_pending` | `bare_affirmative` |
 | `smoke_pending_lead_offer_yes` | `lead_flow` (`session_seed`) |
+| `smoke_cesi_contacts_address` | `contacts_chunk` (`client_id=cesi`) |
+| `smoke_nikadent_contacts_address` | `contacts_chunk` (`client_id=nikadent`) |
 | `smoke_comparison_implant_vs_bridge` | `retrieval_chunk` |
+
+Per-case **`client_id`** в `e2e_smoke.json` (default `demo`); фильтр: `--client cesi` или `E2E_SMOKE_CLIENT=nikadent`.
 
 **`session_seed`** в кейсе (только с `E2E_USE_TEST_CLIENT=1`): после `mem_reset(sid)` задаёт флаги (напр. `pending_lead_offer`). Каждый кейс — уникальный `sid` (`smoke_{case_id}_{ts}_{run_tag}`).
 
-Baseline smoke: **35** (обновить вручную после полного прогона: сейчас **42** кейса). Known failures — массив `known_v4_failures` в том же файле.
+Baseline smoke: **54** (42 demo + 2 multiclient contacts). Known failures — массив `known_v4_failures` в том же файле.
 
 ---
 
@@ -241,8 +246,8 @@ Per-client: `clients/{id}/features.yaml` — `guide_router.enabled` (Phase 4, с
 | Phase | Задача | Статус |
 |-------|--------|--------|
 | **2** | Карта маршрутов (этот документ): legacy vs Resolver, примеры, evals | **done** |
-| **3** | Smoke расширение; вынос оркестрации из `app.py` (`orchestration/`); legacy cleanup по таблице выше | next |
-| **4** | `pending_followup_ref` / clarification slots; первый `guide_router` + golden | после Phase 3 |
+| **3** | Smoke расширение; вынос оркестрации из `app.py` (`orchestration/`); legacy cleanup | **done** |
+| **4** | `pending_followup_ref` / clarification slots; первый `guide_router` + golden | next |
 
 **Не делать в одном PR:** вынос `app.py` + смена routing + guide_router.
 

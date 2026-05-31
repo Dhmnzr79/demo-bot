@@ -56,9 +56,10 @@ ingress / rate limit → flow_handlers → ref / continuation
 
 | Модуль | Роль |
 |--------|------|
-| `app.py` | HTTP, `_orchestrate_ask_turn` (тонкая склейка), `finalize_ask`, dispatch |
+| `app.py` | HTTP, `_orchestrate_ask_turn` (тонкая склейка), dispatch |
+| `orchestration/finalize_turn.py` | `finalize_ask`, telemetry route, bot events |
 | `orchestration/pre_resolver_turn.py` | ingress, flows, guards до Resolver |
-| `orchestration/resolver_turn.py` | Resolver + scope topic candidate |
+| `orchestration/resolver_turn.py` | Resolver + scope topic candidate (без parallel classify_intent) |
 | `orchestration/lead_flow.py` | lead payload + flow → `AskOrchestrationResult` |
 | `orchestration/policy_compat.py` | `apply_response_policy` signature shim |
 | `orchestration/route_guards.py` | pre-Resolver guards (noise, duplicate, anti-spam, continuation clarify payload) |

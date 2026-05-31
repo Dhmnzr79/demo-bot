@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,12 +37,13 @@ def run_resolver_turn(
     enqueue_resolver_trace: Callable[..., None],
 ) -> ResolverTurnOutcome:
     """
-    Resolver + legacy classify_intent parallel path; topic scope candidate for retrieval.
-    Extracted from app._orchestrate_ask_turn (Phase 3d).
+    Resolver path; legacy classify_intent only on RESOLVER_OFF=1 or safety-net (inside resolver).
+    Phase 3: removed parallel classify_intent on every turn (telemetry-only duplicate LLM call).
     """
     resolver_bypassed_env = is_resolver_bypassed_env()
     safety_net_used: list[str] = []
     decision = None
+    intent: str
 
     if resolver_bypassed_env:
         log_json(logger, "resolver_bypassed_env", sid=sid, client_id=client_id)
@@ -58,26 +58,13 @@ def run_resolver_turn(
         )
     else:
         hist = list((st or {}).get("hist") or [])
-        with ThreadPoolExecutor(max_workers=2) as tp:
-            fut_legacy = tp.submit(classify_intent, q, client_id=client_id, sid=sid)
-            decision, safety_net_used = resolve_with_fallback(
-                question=q,
-                history=hist,
-                client_id=client_id,
-                sid=sid,
-                session_state=st,
-            )
-            try:
-                legacy_intent = fut_legacy.result(timeout=180)
-            except Exception as ex_lr:
-                log_json(
-                    logger,
-                    "legacy_intent_parallel_failed",
-                    sid=sid,
-                    client_id=client_id,
-                    err=str(ex_lr)[:400],
-                )
-                legacy_intent = None
+        decision, safety_net_used, legacy_intent = resolve_with_fallback(
+            question=q,
+            history=hist,
+            client_id=client_id,
+            sid=sid,
+            session_state=st,
+        )
         request.ctx["legacy_intent"] = legacy_intent
         request.ctx["resolver_used"] = True
         request.ctx["safety_net_used"] = bool(safety_net_used)

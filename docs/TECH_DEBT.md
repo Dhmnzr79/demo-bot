@@ -21,15 +21,13 @@
 | Задача | Направление | Phase |
 |--------|-------------|-------|
 | Карта маршрутов | `docs/ROUTING_MAP.md` | **2 ✓** |
-| Smoke routing guards (7 кейсов) + `meta.service_route` | `evals/v5/e2e_smoke.json`, runner | **3a ✓** |
-| `orchestration/route_guards.py` (pre-Resolver guards) | вынесено из `app.py` | **3b ✓** |
-| `orchestration/ask_turn.py` + price/catalog/retrieval flows | post-Resolver из `_orchestrate_ask_turn` | **3c ✓** |
-| `pre_resolver_turn` + `resolver_turn` + `lead_flow` | pre-Resolver + Resolver из `app.py` | **3d ✓** |
-| `app.py` большой | дальше: `finalize_ask` / dispatch в orchestration (опционально) | **3** |
-| Smoke на маршруты + legacy cleanup | evals + таблица legacy в ROUTING_MAP | **3** |
-| Smoke runner ↔ orch_route (полное покрытие service_route) | `run_e2e_smoke._infer_route_from_response` | **3** |
-| Legacy `classify_intent` + Resolver | evals → свести к Resolver | **3** |
-| Golden routing per `client_id` | `evals/v5/` | **3** |
+| Smoke routing guards + `meta.service_route` | `evals/v5/e2e_smoke.json`, runner | **3 ✓** |
+| `orchestration/route_guards.py` | pre-Resolver guards | **3 ✓** |
+| `orchestration/ask_turn.py` + price/catalog/retrieval flows | post-Resolver | **3 ✓** |
+| `pre_resolver_turn` + `resolver_turn` + `lead_flow` | pre-Resolver + Resolver | **3 ✓** |
+| `finalize_turn.py`; slim `app.py` | dispatch остаётся в `app.py` | **3 ✓** |
+| Legacy `classify_intent` только safety-net / `RESOLVER_OFF` | `resolver.resolve_with_fallback` | **3 ✓** |
+| Smoke multiclient (`client_id` per case) | cesi, nikadent contacts | **3 ✓** |
 | `pending_followup_ref` / guide_router | после стабильного routing | **4** |
 
 ---
