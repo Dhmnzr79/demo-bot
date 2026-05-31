@@ -35,8 +35,8 @@ from config import (
     PRICE_LOOKUP_RE,
     RATE_LIMIT_MAX_PER_IP,
     RATE_LIMIT_WINDOW_SEC,
-    resolve_client_id,
 )
+from core.client_host import resolve_request_client_id
 from contracts.ask_orchestration import AskOrchestrationResult
 from core.client_config_loader import (
     load_ui_bundle,
@@ -488,8 +488,9 @@ def _is_message_burst(st: dict) -> bool:
 
 
 def _soft_redirect_payload(sid: str, client_id: str | None) -> dict:
+    ui = load_ui_bundle(client_id)
     payload = _service_payload(
-        "Я рассказал уже довольно много о разных темах. Возможно, удобнее обсудить вашу ситуацию напрямую — консультация бесплатна, врач ответит на всё сразу.",
+        ui.anti_spam_soft_redirect,
         sid,
         client_id,
         lead_flow=False,
@@ -635,8 +636,9 @@ def _orchestrate_price_matched_from_route(
 
 
 def _load_prices_for_client(client_id: str | None) -> dict:
-    cid = (client_id or DEFAULT_CLIENT_ID).strip() or DEFAULT_CLIENT_ID
-    p = os.path.join("clients", cid, "prices.json")
+    from core.client_runtime import client_pack_dir
+
+    p = os.path.join(client_pack_dir(client_id), "prices.json")
     try:
         with open(p, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -891,63 +893,9 @@ log_json(logger, "app_start", env=os.getenv("APP_ENV"), version=os.getenv("APP_V
 
 
 def _startup_check() -> None:
-    emb_path = os.path.join("data", "embeddings.npy")
-    corpus_path = os.path.join("data", "corpus.jsonl")
-    service_catalog_path = os.path.join("clients", DEFAULT_CLIENT_ID, "service_catalog.json")
-    prices_path = os.path.join("clients", DEFAULT_CLIENT_ID, "prices.json")
+    from core.startup_check import run_startup_check
 
-    if not os.path.isfile(emb_path):
-        logger.error("startup_check_failed: embeddings file is missing: %s", emb_path)
-        sys.exit(1)
-    try:
-        arr = np.load(emb_path)
-        if not isinstance(arr, np.ndarray):
-            logger.error("startup_check_failed: embeddings file is not a numpy array: %s", emb_path)
-            sys.exit(1)
-    except Exception as e:
-        logger.error("startup_check_failed: cannot read embeddings file %s: %s", emb_path, e)
-        sys.exit(1)
-
-    if not os.path.isfile(corpus_path):
-        logger.error("startup_check_failed: corpus file is missing: %s", corpus_path)
-        sys.exit(1)
-    try:
-        with open(corpus_path, "r", encoding="utf-8") as f:
-            chunks = sum(1 for line in f if line.strip())
-    except Exception as e:
-        logger.error("startup_check_failed: cannot read corpus file %s: %s", corpus_path, e)
-        sys.exit(1)
-    if chunks == 0:
-        logger.error("startup_check_failed: corpus file is empty: %s", corpus_path)
-        sys.exit(1)
-
-    if not os.path.isfile(service_catalog_path):
-        logger.error("startup_check_failed: service catalog file is missing: %s", service_catalog_path)
-        sys.exit(1)
-    try:
-        with open(service_catalog_path, "r", encoding="utf-8") as f:
-            service_catalog = json.load(f)
-        if not isinstance(service_catalog, dict):
-            logger.error("startup_check_failed: service catalog must be a JSON object: %s", service_catalog_path)
-            sys.exit(1)
-    except Exception as e:
-        logger.error("startup_check_failed: invalid service catalog file %s: %s", service_catalog_path, e)
-        sys.exit(1)
-
-    if not os.path.isfile(prices_path):
-        logger.error("startup_check_failed: prices file is missing: %s", prices_path)
-        sys.exit(1)
-    try:
-        with open(prices_path, "r", encoding="utf-8") as f:
-            prices = json.load(f)
-        if not isinstance(prices, dict):
-            logger.error("startup_check_failed: prices must be a JSON object: %s", prices_path)
-            sys.exit(1)
-    except Exception as e:
-        logger.error("startup_check_failed: invalid prices file %s: %s", prices_path, e)
-        sys.exit(1)
-
-    log_json(logger, "startup_check_ok", chunks=chunks, services=len(service_catalog))
+    run_startup_check(logger)
 
 
 _startup_check()
@@ -989,18 +937,10 @@ def debug_ping():
 
 
 def _dashboard_guard():
-    """Локально / не-prod — без токена. В prod нужен X-Dashboard-Token или ?token= (env DASHBOARD_TOKEN или DEBUG_TOKEN)."""
-    if APP_ENV != "prod":
-        return None
-    want = (os.getenv("DASHBOARD_TOKEN") or "").strip() or DEBUG_TOKEN
-    got = (
-        request.headers.get("X-Dashboard-Token")
-        or request.args.get("token")
-        or ""
-    ).strip()
-    if got == want:
-        return None
-    return jsonify({"error": "not_found"}), 404
+    """Legacy JSONL dashboard — disabled in prod (use admin_dashboard/)."""
+    if APP_ENV == "prod":
+        return jsonify({"error": "not_found"}), 404
+    return None
 
 
 def _load_recent_bot_events(
@@ -1079,7 +1019,7 @@ def _orch_decision_dump(decision):
 
 def _orchestrate_ask_turn(data: dict):
     decision = None
-    client_id = resolve_client_id(data.get('client_id'))
+    client_id = resolve_request_client_id(data.get('client_id'), host=request.host)
     if client_id is None:
         return AskOrchestrationResult(kind='unknown_client', client_error={'error': 'unknown_client'}, http_status=403)
     q_raw = data.get('q') or ''
@@ -1318,7 +1258,7 @@ def _orchestrate_ask_turn(data: dict):
                     syn = build_synthetic_doctors_list_chunk(
                         client_id=client_id, facts=cards_raw
                     )
-                    llmq_cards = build_doctors_list_llm_question(user_question=q or '')
+                    llmq_cards = build_doctors_list_llm_question(user_question=q or "", client_id=client_id)
                     return AskOrchestrationResult(
                         kind='chunk',
                         q=q,
@@ -1721,7 +1661,7 @@ def ask():
     request.ctx["turn_t0_monotonic"] = time.monotonic()
     try:
         data = request.get_json(force=True) or {}
-        client_id = resolve_client_id(data.get("client_id"))
+        client_id = resolve_request_client_id(data.get("client_id"), host=request.host)
         if client_id is None:
             return safe_jsonify({"error": "unknown_client"}), 403
         blocked = _widget_origin_forbidden(client_id)
@@ -1921,7 +1861,7 @@ def ask_stream():
     request.ctx["turn_t0_monotonic"] = time.monotonic()
     try:
         data = request.get_json(force=True) or {}
-        client_id = resolve_client_id(data.get("client_id"))
+        client_id = resolve_request_client_id(data.get("client_id"), host=request.host)
         if client_id is None:
             return safe_jsonify({"error": "unknown_client"}), 403
         blocked = _widget_origin_forbidden(client_id)
@@ -1973,7 +1913,7 @@ def dbg():
     if request.headers.get("X-Debug-Token") != DEBUG_TOKEN:
         return jsonify({"error": "unauthorized"}), 401
     q = request.args.get("q", "")
-    client_id = resolve_client_id(request.args.get("client_id"))
+    client_id = resolve_request_client_id(request.args.get("client_id"), host=request.host)
     if client_id is None:
         return jsonify({"error": "unknown_client"}), 403
     q_raw = (q or "").strip()
@@ -2011,7 +1951,7 @@ def dbg():
 @app.get("/api/video-catalog")
 def api_video_catalog():
     """Публичный каталог медиа по client_id для виджета (play-URL через прокси)."""
-    client_id = resolve_client_id(request.args.get("client_id"))
+    client_id = resolve_request_client_id(request.args.get("client_id"), host=request.host)
     if client_id is None:
         return jsonify({"error": "unknown_client"}), 403
     return jsonify({"client_id": client_id, "videos": catalog_for_widget(client_id)}), 200
@@ -2023,7 +1963,7 @@ def api_media_proxy(video_key: str):
     import urllib.error
     import urllib.request
 
-    client_id = resolve_client_id(request.args.get("client_id"))
+    client_id = resolve_request_client_id(request.args.get("client_id"), host=request.host)
     if client_id is None:
         return jsonify({"error": "unknown_client"}), 403
     external = get_external_video_src(client_id=client_id, video_key=video_key)
@@ -2069,7 +2009,7 @@ def api_media_proxy(video_key: str):
 
 @app.get("/api/widget-config")
 def api_widget_config():
-    client_id = resolve_client_id(request.args.get("client_id"))
+    client_id = resolve_request_client_id(request.args.get("client_id"), host=request.host)
     if client_id is None:
         return jsonify({"error": "unknown_client"}), 403
     cfg = load_widget_config(client_id)
@@ -2089,7 +2029,7 @@ def create_lead():
         data = request.get_json(force=True) or {}
     except Exception:
         return jsonify({"ok": False, "error_code": "bad_json", "delivery": None}), 400
-    client_id = resolve_client_id(data.get("client_id"))
+    client_id = resolve_request_client_id(data.get("client_id"), host=request.host)
     if client_id is None:
         return jsonify({"ok": False, "error_code": "unknown_client", "delivery": None}), 403
     blocked = _widget_origin_forbidden(client_id)

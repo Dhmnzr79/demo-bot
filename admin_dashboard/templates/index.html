@@ -4,56 +4,80 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin Dashboard</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}?v=20260531d">
 </head>
 <body>
   <header class="topbar">
-    <h1>Admin Dashboard</h1>
+    <div class="topbar-title">
+      <img class="topbar-logo" src="{{ url_for('static', filename='logo.svg') }}" width="101" height="26" alt="Artgents">
+      <h1>Admin Dashboard</h1>
+      <span class="env-pill">{{ app_env }}</span>
+    </div>
     <div class="controls">
-      <label>client_id
-        <input id="clientId" type="text" value="default">
-      </label>
+      <div class="control-field">
+        <span class="control-label" id="clientLabel">Клиника</span>
+        <select id="clientId" aria-labelledby="clientLabel"></select>
+      </div>
       <button id="refreshBtn" type="button">Обновить</button>
     </div>
   </header>
 
-  <main class="grid">
-    <section class="card wide">
-      <h2>Обзор (сегодня)</h2>
+  <div id="statusBar" class="status-bar" role="status" aria-live="polite"></div>
+
+  <main class="page">
+    <section class="card card-overview">
+      <h2>Обзор (сегодня, UTC)</h2>
       <div id="overview" class="kpi-grid">
         <div class="kpi"><span class="kpi-label">Загрузка...</span><span class="kpi-value">...</span></div>
       </div>
     </section>
-    <section class="card">
+
+    <section class="card card-costs">
       <h2>Стоимость LLM (сегодня)</h2>
       <div id="costs"></div>
     </section>
-    <section class="card">
+
+    <section class="card card-dialogs">
       <h2>Диалоги (последние)</h2>
+      <p class="section-hint muted">Выберите сессию — полный диалог откроется ниже</p>
       <div id="dialogs"></div>
+      <div id="dialogThreadViewer" class="dialog-thread-viewer" hidden>
+        <div class="viewer-head">
+          <div id="dialogViewerTitle" class="viewer-title"></div>
+          <button id="dialogViewerClose" type="button" class="dialog-toggle">Свернуть</button>
+        </div>
+        <div id="dialogThreadBody" class="dialog-thread-body"></div>
+      </div>
     </section>
-    <section class="card">
+
+    <section class="card card-problems">
       <h2>Проблемы</h2>
       <div id="problems"></div>
     </section>
-    <section class="card">
+
+    <section class="card card-leads">
       <h2>Лиды</h2>
       <div id="leads"></div>
     </section>
-    <section class="card wide dev-card">
-      <details>
+
+    <section class="card card-dev">
+      <details id="eventExplorer">
         <summary>Developer Mode: Event Explorer</summary>
         <div class="event-filters">
           <label>event_type <input id="eventTypeFilter" type="text" placeholder="turn_complete"></label>
           <label>sid <input id="sidFilter" type="text" placeholder="insp_..."></label>
           <label>request_id <input id="requestIdFilter" type="text" placeholder="uuid"></label>
         </div>
-        <pre id="events">hidden</pre>
+        <div class="pre-scroll">
+          <pre id="events">hidden</pre>
+        </div>
       </details>
     </section>
   </main>
 
+  <script>
+    window.__ADMIN_DEFAULT_CLIENT_ID__ = {{ default_client_id|tojson }};
+  </script>
   <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 </body>
 </html>
-

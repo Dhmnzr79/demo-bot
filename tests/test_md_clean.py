@@ -36,7 +36,7 @@ def test_build_messages_stream_includes_plain_answer_rule() -> None:
     messages, _, _ = build_messages_for_gpt(
         "Сколько стоят импланты?",
         [{"ref": "implantation__pricing__implants.md#korotko", "content": "тест"}],
-        {},
+        {"client_id": "cesi"},
         "test-sid",
         force_text=True,
     )

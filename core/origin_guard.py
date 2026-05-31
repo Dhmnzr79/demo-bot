@@ -1,11 +1,14 @@
 """Origin / Referer guard for widget embed endpoints (M1/M2)."""
 from __future__ import annotations
 
+import os
 from urllib.parse import urlparse
 
 from flask import request
 
 from core.client_config_loader import load_widget_config
+
+APP_ENV = (os.getenv("APP_ENV") or "local").strip().lower()
 
 _LOCAL_DEV_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
@@ -68,6 +71,8 @@ def validate_widget_origin(client_id: str | None) -> str | None:
     local_dev_hosts = _local_dev_hosts_from_allowed(allowed)
     origin = _normalize_origin(request.headers.get("Origin") or "")
     referer_origin = _origin_from_referer(request.headers.get("Referer") or "")
+    if APP_ENV == "prod" and allowed and not origin and not referer_origin:
+        return "origin_required"
     if not origin and not referer_origin:
         return None
 

@@ -6,7 +6,6 @@ import os
 from core.client_config_loader import resolve_pack_client_id
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-_LEGACY_DATA_DIR = os.path.join(_REPO_ROOT, "data")
 
 
 def client_pack_dir(client_id: str | None) -> str:
@@ -61,7 +60,3 @@ def list_buildable_client_ids() -> list[str]:
             out.append(name)
     return out
 
-
-def legacy_shared_data_dir() -> str:
-    """Pre-M2 shared ``data/`` (migration helper only)."""
-    return _LEGACY_DATA_DIR

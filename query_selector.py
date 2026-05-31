@@ -13,6 +13,7 @@ from config import (
     PRICE_SERVICE_MATCH_STRONG,
 )
 import alias_lexical
+from core.client_config_loader import resolve_pack_client_id
 from core.routing_loader import THRESHOLDS
 from llm import classify_price_intent, rewrite_query_for_retrieval
 from session import mem_get
@@ -258,7 +259,7 @@ def select_chunk_for_question(
 
 
 def _safe_client_id(client_id: str | None) -> str:
-    return (client_id or DEFAULT_CLIENT_ID or "default").strip() or "default"
+    return resolve_pack_client_id(client_id)
 
 
 def _client_json_path(client_id: str | None, file_name: str) -> str:

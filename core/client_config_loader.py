@@ -17,6 +17,7 @@ _FEATURES_CACHE: dict[str, dict[str, Any]] = {}
 _TONE_CACHE: dict[str, dict[str, Any]] = {}
 _UI_CACHE: dict[str, dict[str, Any]] = {}
 _LEAD_CACHE: dict[str, dict[str, Any]] = {}
+_BRAND_CACHE: dict[str, dict[str, Any]] = {}
 _TXT_CACHE: dict[str, dict[str, str]] = {}
 
 # Legacy flat keys used by flow_handlers / app (from tone.yaml).
@@ -195,6 +196,44 @@ def postgres_events_enabled(client_id: str | None) -> bool:
     return feature_flag(client_id, "postgres_events", "enabled", default=False)
 
 
+def admin_enabled(client_id: str | None) -> bool:
+    return feature_flag(client_id, "admin", "enabled", default=False)
+
+
+def load_brand(client_id: str | None) -> dict[str, Any]:
+    pack = resolve_pack_client_id(client_id)
+    return _cached_load(_BRAND_CACHE, pack, "brand.yaml")
+
+
+def list_admin_client_ids() -> list[str]:
+    from config import ALLOWED_CLIENTS
+
+    clients_root = os.path.join(_REPO_ROOT, "clients")
+    if not os.path.isdir(clients_root):
+        return []
+    out: list[str] = []
+    for name in sorted(os.listdir(clients_root)):
+        if name.startswith("_"):
+            continue
+        if not os.path.isdir(os.path.join(clients_root, name)):
+            continue
+        if name not in ALLOWED_CLIENTS:
+            continue
+        if admin_enabled(name):
+            out.append(name)
+    return out
+
+
+def admin_client_options() -> list[dict[str, str]]:
+    return [
+        {
+            "client_id": cid,
+            "label": str(load_brand(cid).get("clinic_name") or cid),
+        }
+        for cid in list_admin_client_ids()
+    ]
+
+
 def consult_nudge_enabled(client_id: str | None) -> bool:
     return feature_flag(client_id, "consult_nudge", "enabled", default=True)
 
@@ -273,6 +312,20 @@ class UiBundle:
     bare_affirmative: UiMenu
     consult_nudge_exhausted: str
     consult_nudge_streak: str
+    anti_spam_soft_redirect: str
+
+
+_DEFAULT_ANTI_SPAM_FREE = (
+    "Я рассказал уже довольно много о разных темах. "
+    "Возможно, удобнее обсудить вашу ситуацию напрямую — консультация бесплатна, "
+    "врач ответит на всё сразу."
+)
+
+_DEFAULT_ANTI_SPAM_NEUTRAL = (
+    "Я рассказал уже довольно много о разных темах. "
+    "Возможно, удобнее обсудить вашу ситуацию напрямую — "
+    "можно записаться на консультацию, врач ответит на всё сразу."
+)
 
 
 _DEFAULT_GUIDED_REPLIES: tuple[dict[str, str], ...] = (
@@ -306,6 +359,7 @@ def load_ui_bundle(client_id: str | None) -> UiBundle:
     guided = ui.get("guided_menu") if isinstance(ui.get("guided_menu"), dict) else {}
     cont = ui.get("continuation_clarify") if isinstance(ui.get("continuation_clarify"), dict) else {}
     cn = ui.get("consult_nudge") if isinstance(ui.get("consult_nudge"), dict) else {}
+    msg = ui.get("messaging") if isinstance(ui.get("messaging"), dict) else {}
 
     guided_menu = _parse_menu(
         guided,
@@ -340,6 +394,13 @@ def load_ui_bundle(client_id: str | None) -> UiBundle:
             "цена фиксируется в договоре без скрытых доплат, возможен налоговый вычет 13%."
         )
 
+    anti_default = (
+        _DEFAULT_ANTI_SPAM_FREE
+        if free_consultation_messaging(client_id)
+        else _DEFAULT_ANTI_SPAM_NEUTRAL
+    )
+    anti_spam = str(msg.get("anti_spam_soft_redirect") or anti_default).strip() or anti_default
+
     return UiBundle(
         guided_menu=guided_menu,
         continuation_clarify=continuation,
@@ -365,6 +426,7 @@ def load_ui_bundle(client_id: str | None) -> UiBundle:
         ),
         consult_nudge_exhausted=str(cn.get("exhausted_prompt") or _DEFAULT_CONSULT_EXHAUSTED).strip(),
         consult_nudge_streak=str(cn.get("streak_prompt") or _DEFAULT_CONSULT_STREAK).strip(),
+        anti_spam_soft_redirect=anti_spam,
     )
 
 

@@ -9,6 +9,8 @@ from urllib.parse import quote
 
 import yaml
 
+from core.client_config_loader import resolve_pack_client_id
+
 _LOCK = threading.Lock()
 _CACHE: dict[str, dict[str, dict[str, str]] | None] = {}
 
@@ -20,7 +22,7 @@ def _catalog_path(client_id: str) -> str:
 
 def load_video_catalog(client_id: str) -> dict[str, dict[str, str]]:
     """Словарь video_key → {src, title}. src — внешний URL из YAML."""
-    cid = (client_id or "").strip() or "default"
+    cid = resolve_pack_client_id(client_id)
     with _LOCK:
         if cid in _CACHE:
             cached = _CACHE[cid]
@@ -48,7 +50,7 @@ def load_video_catalog(client_id: str) -> dict[str, dict[str, str]]:
 
 def media_play_path(client_id: str, video_key: str) -> str:
     """Same-origin URL для video (прокси /api/media, без CORS S3)."""
-    cid = (client_id or "").strip() or "default"
+    cid = resolve_pack_client_id(client_id)
     vk = quote(str(video_key or "").strip(), safe="")
     cqp = quote(cid, safe="")
     return f"/api/media/{vk}?client_id={cqp}"
@@ -67,7 +69,7 @@ def get_external_video_src(*, client_id: str, video_key: str) -> str | None:
 
 def catalog_for_widget(client_id: str) -> dict[str, dict[str, str]]:
     """Каталог с play-URL через прокси приложения."""
-    cid = (client_id or "").strip() or "default"
+    cid = resolve_pack_client_id(client_id)
     out: dict[str, dict[str, str]] = {}
     for vk, meta in load_video_catalog(cid).items():
         out[vk] = {
@@ -88,7 +90,7 @@ def resolve_video_payload(
     meta = cat.get(vk)
     if not meta or not meta.get("src"):
         return None
-    cid = (client_id or "").strip() or "default"
+    cid = resolve_pack_client_id(client_id)
     return {
         "key": vk,
         "src": media_play_path(cid, vk),

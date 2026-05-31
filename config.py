@@ -97,7 +97,7 @@ BOOKING_INTENT_RE = re.compile(
 )
 
 # --- Multi-tenant (сейчас один клиент; неизвестный id → 403) ---
-DEFAULT_CLIENT_ID = os.getenv("DEFAULT_CLIENT_ID", "default").strip() or "default"
+DEFAULT_CLIENT_ID = os.getenv("DEFAULT_CLIENT_ID", "demo").strip() or "demo"
 _ac_raw = os.getenv("ALLOWED_CLIENTS", "").strip()
 if _ac_raw:
     ALLOWED_CLIENTS = frozenset(x.strip() for x in _ac_raw.split(",") if x.strip())
@@ -173,6 +173,8 @@ if not OPENAI_API_KEY:
 
 def resolve_client_id(raw: str | None) -> str | None:
     cid = (raw or "").strip() or DEFAULT_CLIENT_ID
+    if cid == "default":
+        cid = "demo"
     return cid if cid in ALLOWED_CLIENTS else None
 
 

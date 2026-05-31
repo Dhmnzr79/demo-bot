@@ -201,29 +201,32 @@ success_message_key: demo_lead_ok   # текст из tone.yaml
 ## 7. Домены и `client_id`
 
 ```text
-artgents.ru
-  промо-сайт (обычный хостинг)
-  embed виджета → demo или demo.artgents.ru
+artgents.ru (обычный хостинг, не VPS)
+  промо-лендинг + embed виджета demo
+  Origin в allowed_origins demo; API → demo.bot.artgents.ru
 
-demo.artgents.ru
-  client_id = demo
+demo.bot.artgents.ru (VPS, wildcard *.bot.artgents.ru)
+  client_id = demo  (Host → client_id)
   leads off, PG опционально
 
 cesi.bot.artgents.ru
-  client_id = cesi  (Host → client_id)
+  client_id = cesi
 
 nikadent.bot.artgents.ru
   client_id = nikadent
 
 *.bot.artgents.ru
-  wildcard DNS — для 30–40 клиентов без ручной записи на каждого
+  wildcard DNS/TLS — для 30–40 клиентов
 
 admin.bot.artgents.ru
   admin_dashboard (только боевые client_id)
-  Postgres обязателен
 ```
 
-**Правило:** поддомен `*.bot.artgents.ru` **однозначно** задаёт `client_id`. Виджет на сайте клиники ходит на API своего поддомена (`cesi.bot.artgents.ru`).
+**Правило:** API бота живёт только на **`{client_id}.bot.artgents.ru`**. Host **однозначно** задаёт `client_id` в prod (`core/client_host.py`). Лендинг клиники / artgents.ru — отдельный сайт; виджет ходит на API своего bot-поддомена.
+
+**Demo:** страница на `artgents.ru` грузит конфиг с `https://demo.bot.artgents.ru/api/widget-config` (`clients/demo/widget_config.json` → `apiBase`). Локально `static/multiclient/demo.html` сбрасывает `apiBase` на same-origin.
+
+**Не использовать** `demo.artgents.ru` как API-host — в коде нет mapping без сегмента `.bot.`, на prod будет 403.
 
 **Embed и бюджет OpenAI:** список `allowed_origins` в `widget_config.json` — только конфиг. Защита работает, если **сервер на `/ask` и `/lead` проверяет `Origin` / `Referer` (и при необходимости согласованность с Host)** по этому списку и отклоняет запросы с чужих сайтов. Одного поля в JSON недостаточно.
 
@@ -254,9 +257,10 @@ admin.bot.artgents.ru
 
 ```text
                     ┌──────────────────┐
-  demo.artgents.ru  │                  │
-  cesi.bot...       │   bot :8000      │──► data/demo/, data/cesi/, …
-  nikadent.bot...   │   (один код)     │
+  artgents.ru       │                  │     (embed → demo.bot…)
+  demo.bot...       │   bot :8000      │──► data/demo/, data/cesi/, …
+  cesi.bot...       │   (один код)     │
+  nikadent.bot...   │                  │
                     └────────┬─────────┘
                              │
                     ┌────────▼─────────┐

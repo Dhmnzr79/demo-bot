@@ -274,8 +274,10 @@ def chunk_info(ch: dict, sc: float | None = None) -> dict:
     full_md_path = None
     if doc_base:
         full_md_path = get_doc_path(doc_base, client_id=ch_client_id)
-    if not full_md_path:
-        guess = doc if os.path.exists(doc or "") else os.path.join("md", doc_base or "")
+    if not full_md_path and doc_base:
+        from core.client_runtime import client_md_dir
+
+        guess = os.path.join(client_md_dir(ch_client_id), doc_base)
         full_md_path = guess if os.path.exists(guess) else None
 
     if (h2 is None and h3 is None) and full_md_path and text:

@@ -8,16 +8,17 @@
 
 ## 0. Multiclient — что уже есть / чего нет
 
-| Есть в коде | Ещё не сделано (§4.1 MULTICLIENT) |
-|-------------|-----------------------------------|
-| `client_id` в API, `ALLOWED_CLIENTS` | `clients/{id}/md/` без корневого fallback |
-| `clients/default/` catalog, prices | `data/{id}/` corpus/embeddings per client |
-| Фильтр corpus по `client_id` в retriever | `client_data_loader` |
-| `pg_sink` + `admin_dashboard/` | client-aware `session.py` → `data/{id}/bot.db` |
-| | `doctors_lookup` → только `clients/{id}/md/` |
-| | Origin check по `widget_config.allowed_origins` |
+| Есть в коде | Ещё не сделано |
+|-------------|----------------|
+| `client_id` в API, `ALLOWED_CLIENTS`, Host→client (prod) | Origin: домены сайтов клиник в `allowed_origins` |
+| `clients/{id}/md/`, catalog, prices per pack | Prod-контент cesi/nikadent |
+| `core/client_data_loader` → `data/{id}/` corpus/embeddings | VPS deploy (M5) |
+| `session.py` → `data/{id}/bot.db` | |
+| `doctors_lookup` → `clients/{id}/md/` | |
+| `pg_sink` + `admin_dashboard/` | |
+| Origin guard (`core/origin_guard.py`) | |
 
-**Сейчас:** один `DATA_DIR`, один `SQLITE_PATH`, корневой `md/`, `doctors_lookup` читает `md/` — смешение клиник возможно до M1–M2.
+**Сейчас:** изоляция по client pack + per-client SQLite/corpus. Корневой `md/`, `clients/default/`, общий `data/corpus.jsonl` — **удалены**.
 
 ---
 
@@ -51,12 +52,12 @@ Debug: `/_debug/ping`, `/__debug/retrieval` — prod: 404 или token.
 | `flow_handlers.py` | Lead, situation, booking, «да» |
 | `resolver.py` | `DecisionFrame` + safety-net |
 | `source_routing.py` | A3: doctor, catalog, price |
-| `doctors_lookup.py` | Врачи (**legacy: корневой md/**) |
+| `doctors_lookup.py` | Врачи из `clients/{id}/md/` |
 | `query_selector.py` / `retriever.py` | RAG + rerank |
 | `arbiter.py` / `content_arbiter.py` | Выбор ref |
 | `chunk_responder.py` | Chunk → LLM → policy |
 | `verifier.py` | Shadow/trigger verify |
-| `session.py` | SQLite (**один файл на процесс**) |
+| `session.py` | SQLite per client (`data/{id}/bot.db`) |
 | `pg_sink.py` | Async PG events |
 | `admin_dashboard/` | Read-only admin UI |
 | `lead_service.py` | Email + PG (`lead_config.yaml`, `.env` SMTP) |
@@ -85,11 +86,11 @@ ingress / rate limit → flow_handlers → ref / continuation
 
 ---
 
-## 6. Контент (legacy layout)
+## 6. Контент
 
-- MD: **`md/*.md`** (миграция → `clients/{id}/md/`)
-- Catalog/prices: **`clients/default/`** (→ per client)
-- Индекс: **`data/corpus.jsonl`**, **`data/embeddings.npy`** (→ `data/{id}/`)
+- MD: **`clients/{id}/md/`**
+- Catalog/prices: **`clients/{id}/`**
+- Индекс: **`data/{id}/corpus.jsonl`**, **`data/{id}/embeddings.npy`**
 
 ---
 

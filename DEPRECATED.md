@@ -16,14 +16,15 @@
 
 ---
 
-## Пути и конфиг (transitional)
+## Пути и конфиг (удалено / не использовать)
 
-| Устаревшее | Целевое | Фаза |
-|------------|---------|------|
-| Корневой `md/` | `clients/{client_id}/md/` | M1 |
-| `clients/default/` | удалить после cutover | M6 |
-| Один `DATA_DIR` / `SQLITE_PATH` | `data/{client_id}/` + client-aware loader | M2 |
-| Fallback default → корневой md | **запрещено** | MULTICLIENT §2 |
+| Устаревшее | Статус |
+|------------|--------|
+| Корневой `md/` | **удалено** — только `clients/{id}/md/` |
+| `clients/default/` | **удалено** — alias API `default` → pack `demo` |
+| `data/corpus.jsonl`, `data/alias_*`, `data/demo-bot.db` | **удалено** — `data/{id}/` |
+| `config.SQLITE_PATH` / общий `DATA_DIR` | не для runtime; сессии в `data/{id}/bot.db` |
+| Fallback default → корневой md | **запрещено** |
 
 ---
 

@@ -11,7 +11,9 @@ import re
 from typing import Any
 
 import alias_lexical
-from config import CORPUS_PATH
+from core.client_runtime import corpus_paths
+
+CORPUS_PATH = corpus_paths("demo")["corpus"]
 
 _RE_H2 = re.compile(r"^##\s+.*?\{#([a-z0-9\-]+)\}\s*$", re.I | re.M)
 _RE_H3 = re.compile(r"^###\s+.*?\{#([a-z0-9\-]+)\}\s*$", re.I | re.M)

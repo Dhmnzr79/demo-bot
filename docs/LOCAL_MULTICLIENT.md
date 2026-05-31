@@ -23,7 +23,11 @@ BOT_PG_DSN=postgresql://bot:bot@localhost:5432/bot_events
 python admin_dashboard/app.py
 ```
 
-Открыть: `http://127.0.0.1:9100/?client_id=cesi`
+Открыть: `http://127.0.0.1:9100/` — в шапке выбор клиники (ЦЭСИ / НикаДент), `client_id` сохраняется в URL.
+
+Прямые ссылки:
+- `http://127.0.0.1:9100/?client_id=cesi`
+- `http://127.0.0.1:9100/?client_id=nikadent&sid=insp_...` — Event Explorer по диалогу
 
 Таблицы создаются автоматически при первом событии (`pg_sink.py`).
 

@@ -7,6 +7,8 @@ from typing import Any
 
 import yaml
 
+from core.client_config_loader import resolve_pack_client_id
+
 
 @dataclass(frozen=True)
 class ClinicPolicy:
@@ -44,7 +46,7 @@ def _policies_path(client_id: str) -> str:
 
 
 def load_clinic_policies(client_id: str) -> ClinicPoliciesBundle | None:
-    cid = (client_id or "").strip() or "default"
+    cid = resolve_pack_client_id(client_id)
     with _LOCK:
         if cid in _CACHE:
             return _CACHE[cid]

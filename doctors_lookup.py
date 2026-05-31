@@ -15,8 +15,6 @@ from core.client_config_loader import resolve_pack_client_id
 from core.client_runtime import client_md_dir
 from query_selector import match_service_from_catalog
 
-_MD_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "md")
-
 _NAMES_INDEX_LOCK = threading.Lock()
 _NAMES_INDEX: dict[str, tuple[float, frozenset[str]]] = {}
 
@@ -512,13 +510,22 @@ def doctor_list_fact_public_dict(f: DoctorListFact) -> dict[str, Any]:
     return out
 
 
-def build_doctors_list_llm_question(*, user_question: str) -> str:
+def build_doctors_list_llm_question(*, user_question: str, client_id: str | None = None) -> str:
     q0 = (user_question or "").strip()
+    from core.client_config_loader import free_consultation_messaging
+
+    if free_consultation_messaging(client_id):
+        invite = "Заверши приглашением на бесплатную консультацию.\n"
+    else:
+        invite = (
+            "Заверши приглашением записаться на консультацию "
+            "(без слова «бесплатная», если это не указано в фактах ниже).\n"
+        )
     rules = (
         "Перечисли врачей, которые делают эту услугу. Для каждого укажи: полное имя, должность; "
         "если в данных есть experience_years — добавь кратко стаж в годах; "
         "затем одно короткое предложение про подход по полю specialty_brief.\n"
-        "Заверши приглашением на бесплатную консультацию.\n"
+        f"{invite}"
         "Используй ТОЛЬКО факты ниже, ничего не выдумывай. "
         "Если для врача нет experience_years в данных — не упоминай его стаж и не подставляй чужие числа; "
         "не используй слово «null»."

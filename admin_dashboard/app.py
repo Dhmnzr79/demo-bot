@@ -2,9 +2,28 @@
 from __future__ import annotations
 
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(_ROOT, ".env"))
+
 from flask import Flask, jsonify, render_template, request
+
+from core.client_config_loader import admin_client_options, list_admin_client_ids
+from admin_dashboard.dialog_segments import (
+    TurnRow,
+    build_visit_item,
+    dialog_status,
+    group_turns_into_visits,
+    turn_row_to_dict,
+    visit_has_lead,
+)
 
 try:
     import psycopg
@@ -17,8 +36,17 @@ BOT_PG_DSN = (os.getenv("BOT_PG_DSN") or "").strip()
 PORT = int(os.getenv("ADMIN_DASHBOARD_PORT", "9100"))
 ADMIN_TOKEN = (os.getenv("ADMIN_DASHBOARD_TOKEN") or "").strip()
 DB_CONNECT_TIMEOUT_SEC = int(os.getenv("ADMIN_DASHBOARD_DB_CONNECT_TIMEOUT_SEC", "3"))
+VISIT_GAP_MINUTES = int(os.getenv("ADMIN_DIALOG_VISIT_GAP_MIN", "30"))
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+_DASHBOARD_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(_DASHBOARD_DIR, "templates"),
+    static_folder=os.path.join(_DASHBOARD_DIR, "static"),
+)
+if APP_ENV == "local":
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
+_SCHEMA_ENSURED = False
 
 
 def _utc_day_bounds(days_back: int = 0) -> tuple[datetime, datetime]:
@@ -35,26 +63,47 @@ def _guard():
     expected = ADMIN_TOKEN
     if not expected:
         return jsonify({"error": "dashboard_token_not_set"}), 503
-    got = (request.headers.get("X-Admin-Dashboard-Token") or request.args.get("token") or "").strip()
+    got = (request.headers.get("X-Admin-Dashboard-Token") or "").strip()
     if got == expected:
         return None
     return jsonify({"error": "not_found"}), 404
 
 
 def _require_db():
+    global _SCHEMA_ENSURED
     if not BOT_PG_DSN:
         return None, (jsonify({"error": "BOT_PG_DSN_not_set"}), 503)
     if psycopg is None:
         return None, (jsonify({"error": "psycopg_not_installed"}), 503)
     try:
         conn = psycopg.connect(BOT_PG_DSN, autocommit=True, connect_timeout=max(1, DB_CONNECT_TIMEOUT_SEC))
+        if not _SCHEMA_ENSURED:
+            from pg_sink import ensure_pg_schema_conn
+
+            ensure_pg_schema_conn(conn)
+            _SCHEMA_ENSURED = True
     except Exception as e:
         return None, (jsonify({"error": "db_connect_failed", "details": str(e)[:200]}), 503)
     return conn, None
 
 
+def _default_client_id() -> str:
+    ids = list_admin_client_ids()
+    return ids[0] if ids else "cesi"
+
+
 def _client_id() -> str:
-    return (request.args.get("client_id") or "default").strip() or "default"
+    raw = (request.args.get("client_id") or "").strip()
+    return _resolve_client_id(raw if raw else None)
+
+
+def _resolve_client_id(raw: str | None) -> str:
+    cid = (raw or "").strip()
+    if cid:
+        allowed = {item["client_id"] for item in admin_client_options()}
+        if cid in allowed:
+            return cid
+    return _default_client_id()
 
 
 def _to_int(value: str | None, default: int, min_v: int, max_v: int) -> int:
@@ -65,12 +114,149 @@ def _to_int(value: str | None, default: int, min_v: int, max_v: int) -> int:
     return min(max(v, min_v), max_v)
 
 
+def _dialog_status(
+    *,
+    has_lead: bool,
+    last_status: str | None,
+    last_route: str | None,
+) -> str:
+    return dialog_status(has_lead=has_lead, last_status=last_status, last_route=last_route)
+
+
+def _fetch_turn_rows(
+    cur,
+    cid: str,
+    *,
+    sid: str | None = None,
+    d0: datetime | None = None,
+    d1: datetime | None = None,
+) -> dict[str, list[TurnRow]]:
+    where = ["client_id=%s", "event_type='turn_complete'", "sid IS NOT NULL"]
+    params: list[object] = [cid]
+    if sid:
+        where.append("sid=%s")
+        params.append(sid)
+    if d0 is not None:
+        where.append("occurred_at >= %s")
+        params.append(d0)
+    if d1 is not None:
+        where.append("occurred_at < %s")
+        params.append(d1)
+    cur.execute(
+        f"""
+        SELECT
+          sid,
+          occurred_at,
+          status,
+          COALESCE((details->>'turn_number')::int, 0) AS turn_number,
+          COALESCE(
+            NULLIF(details->>'user_text_redacted', ''),
+            details->>'user_preview_redacted'
+          ) AS user_text,
+          details->>'bot_text_redacted' AS bot_text,
+          details->>'route' AS route,
+          COALESCE(details->>'doc_id', details->>'chunk_id') AS doc_id,
+          COALESCE((details->>'latency_ms')::numeric, 0)::float AS latency_ms
+        FROM bot_events
+        WHERE {' AND '.join(where)}
+        ORDER BY sid, occurred_at ASC
+        """,
+        tuple(params),
+    )
+    by_sid: dict[str, list[TurnRow]] = {}
+    for sid_val, ts, status, turn_number, user_text, bot_text, route, doc_id, latency_ms in cur.fetchall():
+        by_sid.setdefault(str(sid_val), []).append(
+            (ts, status, int(turn_number or 0), user_text, bot_text, route, doc_id, float(latency_ms or 0.0))
+        )
+    return by_sid
+
+
+def _fetch_lead_times(cur, cid: str, *, d0: datetime | None = None, d1: datetime | None = None) -> dict[str, list[datetime]]:
+    where = ["client_id=%s", "event_type='lead_submitted'", "status='ok'", "sid IS NOT NULL"]
+    params: list[object] = [cid]
+    if d0 is not None:
+        where.append("occurred_at >= %s")
+        params.append(d0)
+    if d1 is not None:
+        where.append("occurred_at < %s")
+        params.append(d1)
+    cur.execute(
+        f"""
+        SELECT sid, occurred_at
+        FROM bot_events
+        WHERE {' AND '.join(where)}
+        ORDER BY sid, occurred_at ASC
+        """,
+        tuple(params),
+    )
+    out: dict[str, list[datetime]] = {}
+    for sid_val, ts in cur.fetchall():
+        out.setdefault(str(sid_val), []).append(ts)
+    return out
+
+
+def _build_visit_list(
+    turns_by_sid: dict[str, list[TurnRow]],
+    leads_by_sid: dict[str, list[datetime]],
+    *,
+    client_id: str,
+    limit: int,
+) -> list[dict]:
+    items: list[dict] = []
+    for sid, turns in turns_by_sid.items():
+        if not turns:
+            continue
+        visits = group_turns_into_visits(
+            turns,
+            leads_by_sid.get(sid, []),
+            gap_minutes=VISIT_GAP_MINUTES,
+        )
+        total = len(visits)
+        for idx, visit_turns in enumerate(visits):
+            items.append(
+                build_visit_item(sid, client_id, idx, total, visit_turns, leads_by_sid.get(sid, []))
+            )
+    items.sort(key=lambda x: x.get("last_ts") or "", reverse=True)
+    return items[:limit]
+
+
 @app.get("/")
 def home():
     denied = _guard()
     if denied:
         return denied
-    return render_template("index.html", app_env=APP_ENV)
+    default_client_id = _default_client_id()
+    return render_template(
+        "index.html",
+        app_env=APP_ENV,
+        default_client_id=default_client_id,
+    )
+
+
+@app.get("/api/health")
+def api_health():
+    denied = _guard()
+    if denied:
+        return denied
+    if not BOT_PG_DSN:
+        return jsonify({"ok": False, "postgres": "BOT_PG_DSN_not_set", "app_env": APP_ENV}), 503
+    if psycopg is None:
+        return jsonify({"ok": False, "postgres": "psycopg_not_installed", "app_env": APP_ENV}), 503
+    conn, err = _require_db()
+    if err:
+        body = err[0].get_json(silent=True) or {}
+        return jsonify({"ok": False, "postgres": body.get("error", "db_connect_failed"), "app_env": APP_ENV}), 503
+    conn.close()
+    return jsonify({"ok": True, "postgres": "connected", "app_env": APP_ENV})
+
+
+@app.get("/api/clients")
+def api_clients():
+    denied = _guard()
+    if denied:
+        return denied
+    items = admin_client_options()
+    return jsonify({"items": items, "default_client_id": _default_client_id()})
 
 
 @app.get("/api/overview")
@@ -89,7 +275,10 @@ def api_overview():
                 """
                 SELECT
                   count(*) FILTER (WHERE event_type='user_turn_completed') AS user_turns,
-                  count(DISTINCT sid) FILTER (WHERE sid IS NOT NULL) AS conversations,
+                  count(DISTINCT sid) FILTER (WHERE sid IS NOT NULL) AS sessions,
+                  count(DISTINCT sid) FILTER (
+                    WHERE sid IS NOT NULL AND event_type='lead_submitted' AND status='ok'
+                  ) AS sessions_with_lead,
                   count(*) FILTER (WHERE event_type='lead_submitted' AND status='ok') AS leads,
                   count(*) FILTER (WHERE event_type='llm_error') AS llm_errors,
                   count(*) FILTER (WHERE status='error' OR event_type IN ('llm_error', 'ask_failed', 'ask_stream_failed')) AS errors,
@@ -101,7 +290,10 @@ def api_overview():
                 """,
                 (cid, d0, d1),
             )
-            row = cur.fetchone() or (0, 0, 0, 0, 0, 0, 0, 0)
+            row = cur.fetchone() or (0, 0, 0, 0, 0, 0, 0, 0, 0)
+            turns_today = _fetch_turn_rows(cur, cid, d0=d0, d1=d1)
+            leads_today = _fetch_lead_times(cur, cid, d0=d0, d1=d1)
+            visits_today = _build_visit_list(turns_today, leads_today, client_id=cid, limit=10_000)
             cur.execute(
                 """
                 SELECT
@@ -114,21 +306,28 @@ def api_overview():
                 (cid, d0, d1),
             )
             usd = float((cur.fetchone() or [0.0])[0] or 0.0)
+    sessions = int(row[1] or 0)
+    sessions_with_lead = int(row[2] or 0)
+    leads = int(row[3] or 0)
+    visits = len(visits_today)
     return jsonify(
         {
             "client_id": cid,
             "today_utc": d0.date().isoformat(),
             "user_turns": int(row[0] or 0),
-            "conversations": int(row[1] or 0),
-            "leads": int(row[2] or 0),
-            "llm_errors": int(row[3] or 0),
-            "errors": int(row[4] or 0),
-            "no_candidates": int(row[5] or 0),
-            "low_score_fallback": int(row[6] or 0),
-            "fallbacks_total": int((row[5] or 0) + (row[6] or 0)),
-            "avg_latency_ms": float(row[7] or 0.0),
+            "visits": visits,
+            "conversations": visits,
+            "sessions": sessions,
+            "sessions_with_lead": sessions_with_lead,
+            "leads": leads,
+            "llm_errors": int(row[4] or 0),
+            "errors": int(row[5] or 0),
+            "no_candidates": int(row[6] or 0),
+            "low_score_fallback": int(row[7] or 0),
+            "fallbacks_total": int((row[6] or 0) + (row[7] or 0)),
+            "avg_latency_ms": float(row[8] or 0.0),
             "estimated_usd": round(usd, 6),
-            "conversion_percent": round(((int(row[2] or 0) / max(int(row[1] or 0), 1)) * 100.0), 2),
+            "conversion_percent": round(((sessions_with_lead / max(sessions, 1)) * 100.0), 2),
         }
     )
 
@@ -145,80 +344,54 @@ def api_dialogs():
     limit = _to_int(request.args.get("limit"), 30, 1, 200)
     with conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                WITH turn_rows AS (
-                  SELECT sid, client_id, occurred_at, status, details
-                  FROM bot_events
-                  WHERE client_id=%s AND event_type='turn_complete' AND sid IS NOT NULL
-                ),
-                latest_turn AS (
-                  SELECT DISTINCT ON (sid)
-                    sid,
-                    client_id,
-                    occurred_at AS last_ts,
-                    status AS last_status,
-                    details->>'user_text_redacted' AS last_user_text,
-                    details->>'bot_text_redacted' AS last_bot_text,
-                    details->>'route' AS last_route,
-                    COALESCE((details->>'turn_number')::int, 0) AS turn_number
-                  FROM turn_rows
-                  ORDER BY sid, occurred_at DESC
-                ),
-                turns AS (
-                  SELECT sid, count(*)::int AS turns
-                  FROM turn_rows
-                  GROUP BY sid
-                ),
-                leads_by_sid AS (
-                  SELECT sid, bool_or(status='ok') AS has_lead
-                  FROM bot_events
-                  WHERE client_id=%s AND event_type='lead_submitted' AND sid IS NOT NULL
-                  GROUP BY sid
-                )
-                SELECT
-                  lt.sid,
-                  lt.client_id,
-                  lt.last_ts,
-                  lt.last_status,
-                  COALESCE(t.turns, 0) AS turns,
-                  lt.turn_number,
-                  lt.last_route,
-                  lt.last_user_text,
-                  lt.last_bot_text,
-                  COALESCE(lb.has_lead, false) AS has_lead
-                FROM latest_turn lt
-                LEFT JOIN turns t ON t.sid = lt.sid
-                LEFT JOIN leads_by_sid lb ON lb.sid = lt.sid
-                ORDER BY lt.last_ts DESC
-                LIMIT %s
-                """,
-                (cid, cid, limit),
-            )
-            rows = cur.fetchall()
-    out = []
-    for sid, item_client_id, last_ts, last_status, turns, turn_number, last_route, last_user_text, last_bot_text, has_lead in rows:
-        status = "ok"
-        if bool(has_lead):
-            status = "lead"
-        elif (last_status or "").lower() != "ok" or (last_route or "") in ("retrieval_no_candidates", "low_score_fallback"):
-            status = "problem"
-        out.append(
-            {
-                "sid": sid,
-                "client_id": item_client_id,
-                "last_ts": last_ts.isoformat() if last_ts else None,
-                "turns": int(turns or 0),
-                "turn_number": int(turn_number or 0),
-                "last_route": last_route,
-                "last_user_text": last_user_text,
-                "last_bot_text": last_bot_text,
-                "last_status": last_status,
-                "has_lead": bool(has_lead),
-                "status": status,
-            }
-        )
+            turns_by_sid = _fetch_turn_rows(cur, cid)
+            leads_by_sid = _fetch_lead_times(cur, cid)
+    out = _build_visit_list(turns_by_sid, leads_by_sid, client_id=cid, limit=limit)
     return jsonify({"client_id": cid, "items": out})
+
+
+@app.get("/api/dialogs/<sid>/thread")
+def api_dialog_thread(sid: str):
+    denied = _guard()
+    if denied:
+        return denied
+    conn, err = _require_db()
+    if err:
+        return err
+    cid = _client_id()
+    sid_clean = (sid or "").strip()
+    if not sid_clean:
+        return jsonify({"error": "sid_required"}), 400
+    visit_index = _to_int(request.args.get("visit_index"), 0, 0, 999)
+    with conn:
+        with conn.cursor() as cur:
+            turns_by_sid = _fetch_turn_rows(cur, cid, sid=sid_clean)
+            leads_by_sid = _fetch_lead_times(cur, cid)
+    turns = turns_by_sid.get(sid_clean, [])
+    if not turns:
+        return jsonify({"error": "not_found", "sid": sid_clean, "client_id": cid}), 404
+    visits = group_turns_into_visits(
+        turns,
+        leads_by_sid.get(sid_clean, []),
+        gap_minutes=VISIT_GAP_MINUTES,
+    )
+    if visit_index >= len(visits):
+        return jsonify({"error": "visit_not_found", "sid": sid_clean, "visit_index": visit_index}), 404
+    visit_turns = visits[visit_index]
+    last = visit_turns[-1]
+    has_lead = visit_has_lead(visit_turns, leads_by_sid.get(sid_clean, []))
+    return jsonify(
+        {
+            "client_id": cid,
+            "sid": sid_clean,
+            "visit_index": visit_index,
+            "visits_total": len(visits),
+            "turns": [turn_row_to_dict(row) for row in visit_turns],
+            "turns_count": len(visit_turns),
+            "has_lead": has_lead,
+            "status": _dialog_status(has_lead=has_lead, last_status=last[1], last_route=last[5]),
+        }
+    )
 
 
 @app.get("/api/problems")

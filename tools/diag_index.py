@@ -2,7 +2,7 @@
 import os, re, sys, importlib, inspect, json, argparse
 from typing import Iterable, Tuple
 
-DEF_MD_ROOT = "md"
+DEF_MD_ROOT = "clients/demo/md"
 
 def abspath_safe(p):
     try: return os.path.abspath(p)

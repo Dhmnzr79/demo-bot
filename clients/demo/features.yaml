@@ -1,4 +1,4 @@
-# clients/demo/features.yaml — демо для artgents.ru
+# clients/demo/features.yaml — демо для artgents.ru (embed) + demo.bot.artgents.ru (API на VPS)
 leads:
   enabled: false
   mode: demo_stub

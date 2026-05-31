@@ -1,10 +1,11 @@
 {
   "pack_id": "demo",
   "clientId": "demo",
+  "apiBase": "https://demo.bot.artgents.ru",
   "allowed_origins": [
     "https://artgents.ru",
     "https://www.artgents.ru",
-    "https://demo.artgents.ru",
+    "https://demo.bot.artgents.ru",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://localhost:9000",

@@ -182,6 +182,22 @@ def _ensure_tables(conn) -> None:
         )
 
 
+def ensure_pg_schema_conn(conn) -> None:
+    """Create dashboard tables if missing (shared by bot sink and admin)."""
+    _ensure_tables(conn)
+
+
+def ensure_pg_schema(dsn: str, *, connect_timeout: int = 3) -> None:
+    """Connect once and ensure dashboard tables exist."""
+    target = (dsn or "").strip()
+    if not target:
+        return
+    import psycopg
+
+    with psycopg.connect(target, autocommit=True, connect_timeout=max(1, connect_timeout)) as conn:
+        ensure_pg_schema_conn(conn)
+
+
 def _insert_v5_turn_trace(conn, row: dict) -> None:
     from psycopg.types.json import Json
 
