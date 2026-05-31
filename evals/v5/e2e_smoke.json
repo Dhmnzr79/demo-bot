@@ -427,6 +427,64 @@
       "expected_route": "guided",
       "comment": "noise/unclear: должен запросить уточнение",
       "coverage_class": "TEMPLATE"
+    },
+
+    {
+      "id": "smoke_continuation_phrase_no_context",
+      "question": "подробнее",
+      "expected_route": "continuation_clarify",
+      "must_contain": ["интересует"],
+      "comment": "короткое продолжение без session context → clarify menu",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_bare_yes_no_pending",
+      "question": "Да",
+      "expected_route": "bare_affirmative",
+      "must_contain": ["ваш вопрос"],
+      "comment": "«да» без pending_lead_offer → не retrieval, не lead_flow",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_pending_lead_offer_yes",
+      "question": "Да",
+      "session_seed": {"pending_lead_offer": true},
+      "expected_route": "lead_flow",
+      "must_contain": ["как к вам"],
+      "comment": "«да» после explicit lead offer (pending) → lead name step",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_pending_lead_offer_no",
+      "question": "нет",
+      "session_seed": {"pending_lead_offer": true},
+      "expected_route": "lead_offer_declined",
+      "comment": "отказ от lead offer при pending",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_comparison_implant_vs_bridge",
+      "question": "Что лучше: имплант или мост?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["имплант"],
+      "comment": "comparison baseline до guide_router — RAG, не price route",
+      "coverage_class": "STRONG"
+    },
+    {
+      "id": "smoke_comparison_missing_one_tooth",
+      "question": "Что поставить, если нет одного зуба?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["зуб"],
+      "comment": "comparison/choice baseline — pilot topic для guide_router Phase 4",
+      "coverage_class": "WEAK"
+    },
+    {
+      "id": "smoke_comparison_crown_vs_filling",
+      "question": "Коронка или пломба — что лучше?",
+      "expected_route": "retrieval_chunk",
+      "must_contain": ["корон"],
+      "comment": "comparison baseline — retrieval до guide_router",
+      "coverage_class": "WEAK"
     }
   ]
 }

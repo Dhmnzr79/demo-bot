@@ -57,6 +57,33 @@ def _http_post_json(url: str, payload: dict[str, Any], timeout_sec: float) -> di
     return out
 
 
+def _uses_test_client() -> bool:
+    return (os.getenv("E2E_USE_TEST_CLIENT") or "").strip().lower() in {"1", "true", "yes"}
+
+
+def _ensure_repo_on_path() -> str:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    if repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    return repo_root
+
+
+def _reset_smoke_session(sid: str) -> None:
+    """In-proc smoke: чистая SQLite-сессия перед каждым кейсом."""
+    _ensure_repo_on_path()
+    from session import mem_reset
+
+    mem_reset(sid)
+
+
+def _apply_session_seed(sid: str, seed: dict[str, Any]) -> None:
+    _ensure_repo_on_path()
+    from session import set_pending_lead_offer
+
+    if seed.get("pending_lead_offer"):
+        set_pending_lead_offer(sid, True)
+
+
 def _post_ask_json(bot_url: str, payload: dict[str, Any], timeout_sec: float) -> dict[str, Any]:
     """POST /ask JSON: HTTP (default) или Flask test_client при E2E_USE_TEST_CLIENT=1."""
     if (os.getenv("E2E_USE_TEST_CLIENT") or "").strip().lower() in {"1", "true", "yes"}:
@@ -82,6 +109,10 @@ def _infer_route_from_response(resp: dict[str, Any]) -> str:
     if not isinstance(meta, dict):
         meta = {}
     quick_replies = resp.get("quick_replies") or []
+
+    svc = str(meta.get("service_route") or "").strip().lower()
+    if svc:
+        return svc
 
     orch = str(meta.get("orch_route") or "").strip().lower()
     if orch == "price_lookup":
@@ -252,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     errors = 0
 
     ts = int(time.time())
+    run_tag = uuid.uuid4().hex[:8]
 
     for row in cases:
         if not isinstance(row, dict):
@@ -276,10 +308,13 @@ def main(argv: list[str] | None = None) -> int:
         if not isinstance(must_not_contain, list) or not all(isinstance(x, str) for x in must_not_contain):
             must_not_contain = []
 
-        sid = f"smoke_{case_id}_{ts}"
+        sid = f"smoke_{case_id}_{ts}_{run_tag}"
         client_id = os.getenv("CLIENT_ID") or "default"
 
-        # Replay history as prior user turns (same sid, fresh session per case).
+        if _uses_test_client():
+            _reset_smoke_session(sid)
+
+        # Replay history as prior user turns (same sid; session reset above when in-proc).
         if isinstance(history, list) and history:
             for h in history:
                 if not isinstance(h, dict):
@@ -292,6 +327,22 @@ def main(argv: list[str] | None = None) -> int:
                 except Exception:
                     # If history replay fails, still try to run main question for visibility.
                     pass
+
+        session_seed = row.get("session_seed")
+        if isinstance(session_seed, dict) and session_seed:
+            if not _uses_test_client():
+                errors += 1
+                cc = str(row.get("coverage_class") or "UNKNOWN").strip().upper()
+                results.append(
+                    CaseResult(
+                        case_id=case_id,
+                        status="ERROR",
+                        reason="session_seed requires E2E_USE_TEST_CLIENT=1",
+                        coverage_class=cc,
+                    )
+                )
+                continue
+            _apply_session_seed(sid, session_seed)
 
         payload = {"q": question, "sid": sid, "client_id": client_id}
 

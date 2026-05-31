@@ -21,7 +21,11 @@
 | Задача | Направление | Phase |
 |--------|-------------|-------|
 | Карта маршрутов | `docs/ROUTING_MAP.md` | **2 ✓** |
-| `app.py` большой | вынести `orchestration/` | **3** |
+| Smoke routing guards (7 кейсов) + `meta.service_route` | `evals/v5/e2e_smoke.json`, runner | **3a ✓** |
+| `orchestration/route_guards.py` (pre-Resolver guards) | вынесено из `app.py` | **3b ✓** |
+| `orchestration/ask_turn.py` + price/catalog/retrieval flows | post-Resolver из `_orchestrate_ask_turn` | **3c ✓** |
+| `pre_resolver_turn` + `resolver_turn` + `lead_flow` | pre-Resolver + Resolver из `app.py` | **3d ✓** |
+| `app.py` большой | дальше: `finalize_ask` / dispatch в orchestration (опционально) | **3** |
 | Smoke на маршруты + legacy cleanup | evals + таблица legacy в ROUTING_MAP | **3** |
 | Smoke runner ↔ orch_route (полное покрытие service_route) | `run_e2e_smoke._infer_route_from_response` | **3** |
 | Legacy `classify_intent` + Resolver | evals → свести к Resolver | **3** |

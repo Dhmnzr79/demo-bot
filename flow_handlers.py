@@ -374,6 +374,7 @@ def handle_flows(
                     lead_step="name",
                 ),
                 "doc_id": None,
+                "service_route": "lead_flow",
             }
         if parse_lead_offer_no(q):
             clear_pending_lead_offer(sid)
@@ -387,6 +388,7 @@ def handle_flows(
                     client_id,
                 ),
                 "doc_id": None,
+                "service_route": "lead_offer_declined",
             }
         clear_pending_lead_offer(sid)
         st = mem_get(sid)
@@ -408,6 +410,7 @@ def handle_flows(
                 client_id,
             ),
             "doc_id": None,
+            "service_route": "bare_affirmative",
         }
 
     if is_active_lead_flow(st):

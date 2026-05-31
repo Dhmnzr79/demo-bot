@@ -51,7 +51,7 @@
 | 16 | content: Resolver `unknown` + clarify | `guided` | `app.py` |
 | 17 | content: candidates + arbiter | `retrieval_chunk` / `catalog_*` / `guided` / fallbacks | `query_selector`, `content_arbiter` |
 
-**Ingress skip:** есть `ref`, active lead или `situation_pending` — ingress gate не вызывается.
+**Ingress skip:** есть `ref`, active lead, `situation_pending` или **`pending_lead_offer`** — ingress gate не вызывается (`app.py`).
 
 ---
 
@@ -116,7 +116,8 @@
 | Как проходит имплантация? | `retrieval_chunk` | `implantation__*.md` | — |
 | Чем имплантация лучше протезирования? | `retrieval_chunk` (сейчас) | RAG chunk | Resolver: `query_mode=comparison` |
 | Какая погода сегодня? | `ingress_hard_stop_non_target` | ingress payload | — |
-| «да» после lead offer | `lead_flow` | `pending_lead_offer` | — |
+| «да» без pending | `bare_affirmative` | flow_handlers | — |
+| «да» с `pending_lead_offer` | `lead_flow` | flow_handlers | — |
 | «короче» при `current_doc_id` | `retrieval_chunk` | `{doc_id}#korotko` | — |
 
 > Сравнительные вопросы (последняя строка с comparison) **сейчас** идут в RAG. Phase 4: при включённом `guide_router` — отдельный route `guide_*`.
@@ -135,7 +136,8 @@
 
 Порядок (первое совпадение):
 
-1. `meta.orch_route` ∈ `{price_lookup, doctors_list, contacts_chunk, price_concern}` → как есть
+1. **`meta.service_route`** — orchestration route из `_service_reply` / chunk `orch_route` (Phase 3a)
+2. `meta.orch_route` ∈ `{price_lookup, doctors_list, contacts_chunk, price_concern}` → как есть
 2. `meta.ingress_route` (≠ `normal`) → `ingress_{route}`
 3. `meta.handoff_filter` → `handoff_filter`
 4. `meta.lead_flow` или `meta.booking_intent` → `lead_flow`
@@ -152,9 +154,10 @@
 
 | Orchestration (`service_route` / `chunk_route`) | Что увидит smoke |
 |-------------------------------------------------|------------------|
+| `continuation_clarify`, `bare_affirmative`, `lead_offer_declined` | как в orchestration (**через `meta.service_route`**, Phase 3a) |
 | `catalog_md_first` | `retrieval_chunk` (есть `meta.file`) |
 | `retrieval_no_candidates` | часто `guided` (quick_replies) или `""` |
-| `continuation_clarify`, `duplicate_short_circuit`, `booking_flow` | **нет** стабильного контракта — не использовать в smoke без доработки runner (Phase 3) |
+| `duplicate_short_circuit`, `booking_flow` | пока без `service_route` в JSON — **не** использовать в smoke |
 | chunk с `orch_route=retrieval_chunk` | `retrieval_chunk` (шаг 10) |
 
 ---
@@ -165,6 +168,9 @@
 
 | Smoke route | Как распознаётся | Примеры case id |
 |-------------|------------------|-----------------|
+| `continuation_clarify` | `meta.service_route` | `smoke_continuation_phrase_no_context` («подробнее» без контекста) |
+| `bare_affirmative` | `meta.service_route` | `smoke_bare_yes_no_pending` («Да» без pending — **не** continuation) |
+| `lead_offer_declined` | `meta.service_route` | `smoke_pending_lead_offer_no` |
 | `contacts_chunk` | `orch_route` или `meta.file=clinic__info__contacts.md` | `smoke_contacts_phone` |
 | `lead_flow` | `meta.lead_flow` / `meta.booking_intent` | `smoke_booking_want` |
 | `price_lookup` | `orch_route`, `meta.intent`, или `__pricing__` в file | `smoke_price_classic` |
@@ -178,7 +184,7 @@
 
 Runner: `python evals/v5/run_e2e_smoke.py` (см. `evals/v5/README.md`).
 
-**Phase 3 (долг):** расширить runner (`orch_route` для всех chunk_route, явные service_route) или добавить `meta.smoke_route` — см. `TECH_DEBT.md`.
+**Phase 3 (долг):** прокинуть `service_route` для `duplicate_short_circuit` / `booking_flow` или добавить отдельный smoke helper.
 
 ---
 
@@ -206,8 +212,14 @@ Runner: `python evals/v5/run_e2e_smoke.py` (см. `evals/v5/README.md`).
 | `smoke_handoff_weather` | `ingress_hard_stop_non_target` |
 | `smoke_noise_unclear_short` | `guided` |
 | `smoke_ingress_pediatric` | `ingress_service_not_offered` |
+| `smoke_continuation_phrase_no_context` | `continuation_clarify` |
+| `smoke_bare_yes_no_pending` | `bare_affirmative` |
+| `smoke_pending_lead_offer_yes` | `lead_flow` (`session_seed`) |
+| `smoke_comparison_implant_vs_bridge` | `retrieval_chunk` |
 
-Baseline smoke: **35** PASS (фиксирован в `e2e_smoke.json`). Known failures — массив `known_v4_failures` в том же файле.
+**`session_seed`** в кейсе (только с `E2E_USE_TEST_CLIENT=1`): после `mem_reset(sid)` задаёт флаги (напр. `pending_lead_offer`). Каждый кейс — уникальный `sid` (`smoke_{case_id}_{ts}_{run_tag}`).
+
+Baseline smoke: **35** (обновить вручную после полного прогона: сейчас **42** кейса). Known failures — массив `known_v4_failures` в том же файле.
 
 ---
 

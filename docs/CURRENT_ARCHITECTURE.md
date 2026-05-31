@@ -56,7 +56,17 @@ ingress / rate limit → flow_handlers → ref / continuation
 
 | Модуль | Роль |
 |--------|------|
-| `app.py` | HTTP, `_orchestrate_ask_turn` |
+| `app.py` | HTTP, `_orchestrate_ask_turn` (тонкая склейка), `finalize_ask`, dispatch |
+| `orchestration/pre_resolver_turn.py` | ingress, flows, guards до Resolver |
+| `orchestration/resolver_turn.py` | Resolver + scope topic candidate |
+| `orchestration/lead_flow.py` | lead payload + flow → `AskOrchestrationResult` |
+| `orchestration/policy_compat.py` | `apply_response_policy` signature shim |
+| `orchestration/route_guards.py` | pre-Resolver guards (noise, duplicate, anti-spam, continuation clarify payload) |
+| `orchestration/ask_turn.py` | post-Resolver: contacts → A3 → price fallback → content arbiter → selection |
+| `orchestration/price_flow.py` | A3 price route + `price_lookup` intent fallback |
+| `orchestration/catalog_flow.py` | A3 doctor list + catalog facts + md priority |
+| `orchestration/retrieval_flow.py` | content arbiter path + legacy selection fallback |
+| `orchestration/helpers.py` | decision_dump, scope ctx, price line, guided menu, selection log |
 | `core/client_host.py` | Host → `client_id` (prod) |
 | `core/origin_guard.py` | Origin/Referer vs `allowed_origins` |
 | `core/startup_check.py` | Старт: артефакты `data/{id}/` |

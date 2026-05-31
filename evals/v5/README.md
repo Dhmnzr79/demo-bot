@@ -35,7 +35,8 @@ python evals/v5/run_layer_eval.py --layer all
 
 - `question`: текущий turn
 - `history`: опционально, массив предыдущих turns вида `[{\"question\": \"...\"}]` (runner проигрывает их в `/ask` с той же `sid`)
-- `expected_route`: опционально, строка
+- `expected_route`: опционально, строка (см. `_infer_route_from_response` — приоритет `meta.service_route`)
+- `session_seed`: опционально, объект (напр. `{"pending_lead_offer": true}`) — только с `E2E_USE_TEST_CLIENT=1`; runner делает `mem_reset(sid)` перед кейсом, затем seed
 - `expected_route_any`: опционально, массив строк (ambiguous кейсы)
 - `must_contain` / `must_not_contain`: опционально, массив строк (case-insensitive substring)
 
